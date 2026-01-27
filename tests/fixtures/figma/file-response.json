@@ -1,0 +1,121 @@
+{
+  "name": "Design System",
+  "lastModified": "2026-01-20T10:00:00Z",
+  "thumbnailUrl": "https://example.com/thumbnail.png",
+  "version": "1234567890",
+  "schemaVersion": 0,
+  "components": {},
+  "styles": {},
+  "document": {
+    "id": "0:0",
+    "name": "Document",
+    "type": "DOCUMENT",
+    "children": [
+      {
+        "id": "1:0",
+        "name": "Design System",
+        "type": "CANVAS",
+        "children": [
+          {
+            "id": "2:0",
+            "name": "Icons",
+            "type": "FRAME",
+            "visible": true,
+            "absoluteBoundingBox": {
+              "x": 0,
+              "y": 0,
+              "width": 1000,
+              "height": 1000
+            },
+            "children": [
+              {
+                "id": "10:1",
+                "name": "ic/home-24-line",
+                "type": "COMPONENT",
+                "visible": true,
+                "absoluteBoundingBox": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 24,
+                  "height": 24
+                },
+                "children": []
+              },
+              {
+                "id": "10:2",
+                "name": "ic/search-24-line",
+                "type": "COMPONENT",
+                "visible": true,
+                "absoluteBoundingBox": {
+                  "x": 30,
+                  "y": 0,
+                  "width": 24,
+                  "height": 24
+                },
+                "children": []
+              },
+              {
+                "id": "10:3",
+                "name": "ic/settings-16-filled",
+                "type": "COMPONENT",
+                "visible": true,
+                "absoluteBoundingBox": {
+                  "x": 60,
+                  "y": 0,
+                  "width": 16,
+                  "height": 16
+                },
+                "children": []
+              },
+              {
+                "id": "10:4",
+                "name": "ic/user-32-line--dark",
+                "type": "COMPONENT",
+                "visible": true,
+                "absoluteBoundingBox": {
+                  "x": 90,
+                  "y": 0,
+                  "width": 32,
+                  "height": 32
+                },
+                "children": []
+              },
+              {
+                "id": "10:5",
+                "name": "other/not-icon",
+                "type": "COMPONENT",
+                "visible": true,
+                "absoluteBoundingBox": {
+                  "x": 130,
+                  "y": 0,
+                  "width": 24,
+                  "height": 24
+                },
+                "children": []
+              },
+              {
+                "id": "10:6",
+                "name": "ic/hidden-24-line",
+                "type": "COMPONENT",
+                "visible": false,
+                "absoluteBoundingBox": {
+                  "x": 160,
+                  "y": 0,
+                  "width": 24,
+                  "height": 24
+                },
+                "children": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "3:0",
+        "name": "Other Page",
+        "type": "CANVAS",
+        "children": []
+      }
+    ]
+  }
+}

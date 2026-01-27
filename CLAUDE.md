@@ -1,0 +1,123 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+Figma Sprite Automation Tool - Generates PNG/SVG sprite sheets, SCSS mixins, and JSON metadata from Figma design systems. Single Source of Truth (SSoT) approach using Figma REST API.
+
+**Key Principle**: Deterministic generation from Figma → reproducible builds via CLI.
+
+## Core Architecture
+
+### Input → Output Flow
+```
+figma.sprite.config.json
+  ↓
+Figma REST API (fileKey + page)
+  ↓
+Filter icons by scope (prefix-based)
+  ↓
+Export PNG/SVG per icon
+  ↓
+Generate:
+  - sprite.png / sprite@2x.png (packed)
+  - sprite.svg (symbol-based)
+  - sprite.scss (mixin + retina support)
+  - sprite.json (metadata + hashing)
+```
+
+### Critical Components
+
+**1. sprite.json** - Automation backbone
+- Change detection (diff tracking)
+- Duplicate detection via hashing
+- CI report generation
+- Future MCP/LLM integration target
+
+**2. ID Collision Strategy**
+- MUST fail build on duplicate icon IDs with different nodeIds
+- Hash collisions: warn only, do NOT auto-merge in MVP
+- Error messages must show all conflicting nodeIds and resolution steps
+
+**3. Naming Convention**
+```
+{name}-{size}-{style}{theme?--{theme}}
+Example: ic-home-24-line, ic-search-16-filled--dark
+```
+Sanitization: special chars removed, kebab-case enforced
+
+## Configuration Schema
+
+Config file: `figma.sprite.config.json`
+
+**Critical Fields**:
+- `figma.fileKey`: Figma file identifier (required)
+- `figma.page`: Icon source page in Figma
+- `figma.scope.type`: Filter method (currently "prefix" only)
+- `formats.png.scale`: 2 for retina (@2x generation)
+- `naming.idFormat`: Template for final icon IDs
+
+## Build Process
+
+Expected CLI command structure:
+```bash
+npm run sprite
+# or
+npx figma-sprite build
+```
+
+**Environment**: Requires `FIGMA_TOKEN` environment variable
+
+**Build Steps**:
+1. Load & validate config
+2. Query Figma file tree
+3. Filter icons by page + scope rules
+4. Export PNG/SVG assets
+5. Generate SVG sprite with `<symbol>` elements
+6. Pack PNG sprite (with padding)
+7. Generate sprite.json with metadata + hashes
+8. Generate sprite.scss with retina media query
+9. Write all outputs to configured directory
+
+## Output Specifications
+
+### sprite.scss
+- Uses SCSS map for icon coordinates
+- `@mixin sprite-icon($name)` for consumption
+- Automatic retina support via media query
+- MUST error if icon name not found in map
+
+### sprite.svg
+- `<symbol id="...">` format
+- Preserves viewBox from Figma
+- Optional SVGO optimization
+
+### sprite.json
+- Includes generation metadata (timestamp, config snapshot)
+- Per-icon: nodeId, variants, coordinates, hashes
+- Hash format: separate for SVG and PNG
+
+## Development Guidelines
+
+**When implementing the build pipeline**:
+- PNG packing algorithm must respect configured padding
+- SVG export must preserve Figma's viewBox values
+- All file I/O should handle Windows path separators
+- Config validation should fail fast with clear error messages
+
+**Error handling priorities**:
+1. Duplicate icon IDs → hard failure
+2. Missing Figma token → clear setup instructions
+3. API failures → retry logic with exponential backoff
+4. Hash mismatches → detailed diff output
+
+**Testing considerations**:
+- Mock Figma API responses for deterministic tests
+- Test PNG packing with various icon sizes
+- Validate SCSS output compiles correctly
+- Verify SVG symbol IDs match config naming rules
+
+## Future Extension Points
+
+The spec mentions "향후 MCP/LLM 자동화 확장" (future MCP/LLM automation expansion) via sprite.json. Design decisions should maintain sprite.json as a stable, machine-readable format.

@@ -1,0 +1,10 @@
+{
+  "figma": {
+    "fileKey": "TestFileKey123",
+    "page": "Icons",
+    "scope": {
+      "type": "prefix",
+      "value": "ic/"
+    }
+  }
+}

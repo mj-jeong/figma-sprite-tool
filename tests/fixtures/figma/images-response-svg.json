@@ -1,0 +1,9 @@
+{
+  "err": null,
+  "images": {
+    "10:1": "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/mock-home.svg",
+    "10:2": "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/mock-search.svg",
+    "10:3": "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/mock-settings.svg",
+    "10:4": "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/mock-user.svg"
+  }
+}

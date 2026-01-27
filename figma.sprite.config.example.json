@@ -1,0 +1,29 @@
+{
+  "figma": {
+    "fileKey": "YOUR_FIGMA_FILE_KEY",
+    "page": "Design System / Icons",
+    "scope": {
+      "type": "prefix",
+      "value": "ic/"
+    }
+  },
+  "output": {
+    "dir": "output",
+    "name": "sprite"
+  },
+  "formats": {
+    "png": {
+      "enabled": true,
+      "scale": 2,
+      "padding": 2
+    },
+    "svg": {
+      "enabled": true,
+      "svgo": true
+    }
+  },
+  "naming": {
+    "idFormat": "{name}-{size}-{style}{theme?--{theme}}",
+    "sanitize": true
+  }
+}

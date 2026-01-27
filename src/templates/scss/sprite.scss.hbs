@@ -1,0 +1,38 @@
+// --------------------------------------------------
+// Auto-generated file. DO NOT EDIT.
+// Source: Figma
+// --------------------------------------------------
+
+$sprite-image: "{{spriteImage}}";
+$sprite-image-2x: "{{spriteImage2x}}";
+$sprite-width: {{spriteWidth}}px;
+$sprite-height: {{spriteHeight}}px;
+
+$icons: (
+{{#each icons}}
+  "{{id}}": (x: {{x}}px, y: {{y}}px, w: {{w}}px, h: {{h}}px){{#unless @last}},{{/unless}}
+{{/each}}
+);
+
+@function _icon($name) {
+  @return map-get($icons, $name);
+}
+
+@mixin sprite-icon($name) {
+  $icon: _icon($name);
+
+  @if $icon == null {
+    @error "Sprite icon `#{$name}` not found.";
+  }
+
+  width: map-get($icon, w);
+  height: map-get($icon, h);
+  background-image: url(#{$sprite-image});
+  background-repeat: no-repeat;
+  background-position: -#{map-get($icon, x)} -#{map-get($icon, y)};
+  background-size: $sprite-width $sprite-height;
+
+  @media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+    background-image: url(#{$sprite-image-2x});
+  }
+}
