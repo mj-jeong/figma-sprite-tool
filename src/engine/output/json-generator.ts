@@ -34,6 +34,14 @@ export interface JsonGenerationOptions {
     hash: string;
     icons: SvgIconData[];
   };
+  /** Failed assets during export */
+  failedAssets?: Array<{
+    format: 'png' | 'svg';
+    exportId: string;
+    iconIds: string[];
+    nodeIds: string[];
+    reason: string;
+  }>;
 }
 
 /**
@@ -51,6 +59,16 @@ export interface SpriteJsonOutput {
     };
     svg?: {
       svgo: boolean;
+    };
+    failedAssets?: {
+      total: number;
+      items: Array<{
+        format: 'png' | 'svg';
+        exportId: string;
+        iconIds: string[];
+        nodeIds: string[];
+        reason: string;
+      }>;
     };
   };
   icons: {
@@ -235,6 +253,12 @@ export function generateSpriteJson(options: JsonGenerationOptions): string {
       generatedAt: generateTimestamp(),
       png: options.png,
       svg: options.svg,
+      failedAssets: options.failedAssets
+        ? {
+            total: options.failedAssets.length,
+            items: options.failedAssets,
+          }
+        : undefined,
     },
     icons: {},
   };

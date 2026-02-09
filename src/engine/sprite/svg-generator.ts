@@ -10,6 +10,7 @@ import { createHash } from 'node:crypto';
 import {
   extractViewBox,
   extractSvgInnerContent,
+  parseViewBox,
   validateViewBox,
 } from './viewbox-extractor.js';
 
@@ -32,6 +33,8 @@ const DEFAULT_SVG_OPTIONS: SvgGenerationOptions = {
   optimize: true,
   pretty: false,
 };
+
+const DEFAULT_PREVIEW_PADDING = 8;
 
 /**
  * Default SVGO configuration for symbol sprites
@@ -91,6 +94,9 @@ export async function generateSvgSprite(
   try {
     // Sort icons deterministically by ID
     const sortedIcons = [...svgIcons].sort((a, b) => a.id.localeCompare(b.id));
+    const canvas = calculateSpriteCanvas(sortedIcons, {
+      padding: DEFAULT_PREVIEW_PADDING,
+    });
 
     // Build symbol elements
     const symbols = sortedIcons.map((icon) => {
@@ -108,7 +114,7 @@ export async function generateSvgSprite(
 
     // Build complete SVG sprite
     const spriteContent = [
-      '<svg xmlns="http://www.w3.org/2000/svg">',
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${canvas.width}" height="${canvas.height}" viewBox="0 0 ${canvas.width} ${canvas.height}">`,
       ...symbols,
       '</svg>',
     ].join('\n');
@@ -180,33 +186,24 @@ export function generateSvgSpritePreview(
     return '<svg xmlns="http://www.w3.org/2000/svg"></svg>';
   }
 
-  const padding = options.padding ?? 8;
-  const columns = options.columns ?? Math.ceil(Math.sqrt(icons.length));
-
-  const maxWidth = Math.max(...icons.map((icon) => icon.width));
-  const maxHeight = Math.max(...icons.map((icon) => icon.height));
-  const cellWidth = maxWidth + padding * 2;
-  const cellHeight = maxHeight + padding * 2;
-
-  const rows = Math.ceil(icons.length / columns);
-  const width = columns * cellWidth;
-  const height = rows * cellHeight;
+  const canvas = calculateSpriteCanvas(icons, options);
 
   const symbols = extractSvgInnerContent(sprite.content);
 
   const uses = icons.map((icon, index) => {
-    const col = index % columns;
-    const row = Math.floor(index / columns);
-    const x = col * cellWidth + padding;
-    const y = row * cellHeight + padding;
+    const col = index % canvas.columns;
+    const row = Math.floor(index / canvas.columns);
+    const x = col * canvas.cellWidth + canvas.padding;
+    const y = row * canvas.cellHeight + canvas.padding;
     const id = icon.id;
-    const width = icon.width;
-    const height = icon.height;
+    const visual = getIconVisualSize(icon);
+    const width = visual.width;
+    const height = visual.height;
     return `  <use href="#${escapeXml(id)}" x="${x}" y="${y}" width="${width}" height="${height}" />`;
   });
 
   return [
-    `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${canvas.width}" height="${canvas.height}" viewBox="0 0 ${canvas.width} ${canvas.height}">`,
     '  <defs>',
     symbols,
     '  </defs>',
@@ -342,6 +339,68 @@ function escapeXml(text: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;');
+}
+
+interface SpriteCanvas {
+  padding: number;
+  columns: number;
+  rows: number;
+  cellWidth: number;
+  cellHeight: number;
+  width: number;
+  height: number;
+}
+
+function calculateSpriteCanvas(
+  icons: Array<{ width: number; height: number }>,
+  options: { padding?: number; columns?: number } = {}
+): SpriteCanvas {
+  const padding = Math.max(0, options.padding ?? DEFAULT_PREVIEW_PADDING);
+  const columns = Math.max(1, options.columns ?? Math.ceil(Math.sqrt(icons.length)));
+
+  const maxWidth = Math.max(
+    ...icons.map((icon) => getIconVisualSize(icon).width)
+  );
+  const maxHeight = Math.max(
+    ...icons.map((icon) => getIconVisualSize(icon).height)
+  );
+  const cellWidth = Math.max(1, maxWidth + padding * 2);
+  const cellHeight = Math.max(1, maxHeight + padding * 2);
+  const rows = Math.max(1, Math.ceil(icons.length / columns));
+  const width = columns * cellWidth;
+  const height = rows * cellHeight;
+
+  return {
+    padding,
+    columns,
+    rows,
+    cellWidth,
+    cellHeight,
+    width,
+    height,
+  };
+}
+
+function getIconVisualSize(icon: { width: number; height: number; viewBox?: string }): {
+  width: number;
+  height: number;
+} {
+  if (icon.viewBox) {
+    try {
+      const parsed = parseViewBox(icon.viewBox);
+      return {
+        width: Math.max(1, Math.ceil(parsed.width)),
+        height: Math.max(1, Math.ceil(parsed.height)),
+      };
+    } catch {
+      // Fall back to declared width/height
+    }
+  }
+
+  return {
+    width: Math.max(1, Math.ceil(icon.width)),
+    height: Math.max(1, Math.ceil(icon.height)),
+  };
 }
 
 /**

@@ -7,7 +7,7 @@ import type { ParsedIconNode } from '../types/figma.js';
 import type { IconData, SvgIconData } from '../types/sprite.js';
 import type { SpriteConfig } from '../types/config.js';
 import { FigmaClient } from './client.js';
-import { SpriteError, ErrorCode, createFigmaError } from '../../utils/errors.js';
+import { ErrorCode, createFigmaError } from '../../utils/errors.js';
 import { groupByExportId } from './utils.js';
 
 /**
@@ -28,12 +28,22 @@ const DEFAULT_PARALLEL_OPTIONS: ParallelDownloadOptions = {
   batchSize: 50, // Max node IDs per export request
 };
 
+interface ExportRequestOptions {
+  format: 'png' | 'svg';
+  scale?: number;
+  use_absolute_bounds?: boolean;
+  svg_include_id?: boolean;
+  svg_simplify_stroke?: boolean;
+}
+
 /**
  * Export result with statistics
  */
 export interface ExportResult<T> {
   /** Exported items */
   items: T[];
+  /** Failed asset exports */
+  failures: ExportFailure[];
   /** Export statistics */
   stats: {
     total: number;
@@ -43,30 +53,16 @@ export interface ExportResult<T> {
   };
 }
 
+export interface ExportFailure {
+  format: 'png' | 'svg';
+  exportId: string;
+  iconIds: string[];
+  nodeIds: string[];
+  reason: string;
+}
+
 /**
  * Export PNG images from Figma nodes with parallel downloads
- *
- * @param client - Figma API client
- * @param fileKey - Figma file key
- * @param iconNodes - Icon nodes to export
- * @param iconMetadata - Icon ID to node mapping
- * @param scale - PNG scale factor (1 or 2)
- * @param options - Parallel download options
- * @returns Export result with icon data
- * @throws SpriteError on export failures
- *
- * @example
- * ```typescript
- * const result = await exportPngImages(
- *   client,
- *   'AbCdEf123456',
- *   iconNodes,
- *   iconMetadata,
- *   2, // 2x scale for retina
- *   { maxConcurrency: 5 }
- * );
- * console.log(`Exported ${result.stats.successful}/${result.stats.total} icons`);
- * ```
  */
 export async function exportPngImages(
   client: FigmaClient,
@@ -87,80 +83,76 @@ export async function exportPngImages(
   const batches = createBatches(uniqueExportIds, opts.batchSize);
 
   const iconDataList: IconData[] = [];
-  const errors: Array<{ nodeId: string; error: string }> = [];
+  const errors: Array<{ exportId: string; error: string }> = [];
 
   // Process batches sequentially to respect rate limits
   for (let i = 0; i < batches.length; i++) {
     const batch = batches[i];
 
-    try {
-      // Request export URLs for batch
-      const imagesResponse = await client.exportImages(fileKey, {
-        ids: batch,
+    const imagesResponse = await exportWithBatchFallback(
+      client,
+      fileKey,
+      batch,
+      {
         format: 'png',
         scale,
         use_absolute_bounds: true,
-      });
+      },
+      errors,
+    );
 
-      // Download images in parallel (within batch)
-      const downloadPromises = Object.entries(imagesResponse.images).map(async ([exportId, url]) => {
-        if (!url) {
-          errors.push({ nodeId: exportId, error: 'Export URL is null' });
-          return [];
-        }
-
-        try {
-          const buffer = await client.downloadImage(url);
-
-          // Find ALL icons that share this exportId (multiple instances of same component)
-          const iconIds = exportIdMap.get(exportId) || [];
-
-          if (iconIds.length === 0) {
-            errors.push({ nodeId: exportId, error: 'No icons found for this exportId' });
-            return [];
-          }
-
-          // Create IconData for each icon sharing this exportId
-          const iconDataArray: IconData[] = iconIds
-            .map((iconId) => {
-              const metadata = iconMetadata.get(iconId);
-              if (!metadata) {
-                // This should never happen as we built exportIdMap from iconMetadata
-                console.warn(`⚠️  Icon metadata missing for ${iconId}`);
-                return null;
-              }
-              return {
-                id: iconId,
-                name: metadata.name,
-                nodeId: metadata.nodeId,
-                variants: {}, // Will be populated by parser
-                width: metadata.bounds.width,
-                height: metadata.bounds.height,
-                buffer,
-              };
-            })
-            .filter((item): item is IconData => item !== null);
-
-          return iconDataArray;
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          errors.push({ nodeId: exportId, error: errorMessage });
-          return [];
-        }
-      });
-
-      // Wait for batch downloads with concurrency limit
-      const batchResults = await parallelLimit(downloadPromises, opts.maxConcurrency);
-      // Flatten the array of arrays (each download can return multiple IconData)
-      const flatResults = batchResults.flat().filter((item): item is IconData => item !== null);
-      iconDataList.push(...flatResults);
-    } catch (error) {
-      // Batch export failed
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      for (const nodeId of batch) {
-        errors.push({ nodeId, error: errorMessage });
+    // Download images in parallel (within batch)
+    const downloadPromises = Object.entries(imagesResponse.images).map(async ([exportId, url]) => {
+      if (!url) {
+        errors.push({ exportId, error: 'Export URL is null' });
+        return [];
       }
-    }
+
+      try {
+        const buffer = await client.downloadImage(url);
+
+        // Find ALL icons that share this exportId (multiple instances of same component)
+        const iconIds = exportIdMap.get(exportId) || [];
+
+        if (iconIds.length === 0) {
+          errors.push({ exportId, error: 'No icons found for this exportId' });
+          return [];
+        }
+
+        // Create IconData for each icon sharing this exportId
+        const iconDataArray: IconData[] = iconIds
+          .map((iconId) => {
+            const metadata = iconMetadata.get(iconId);
+            if (!metadata) {
+              // This should never happen as we built exportIdMap from iconMetadata
+              console.warn(`Warning: Icon metadata missing for ${iconId}`);
+              return null;
+            }
+            return {
+              id: iconId,
+              name: metadata.name,
+              nodeId: metadata.nodeId,
+              variants: {}, // Will be populated by parser
+              width: normalizeSize(metadata.bounds.width),
+              height: normalizeSize(metadata.bounds.height),
+              buffer,
+            };
+          })
+          .filter((item): item is IconData => item !== null);
+
+        return iconDataArray;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        errors.push({ exportId, error: errorMessage });
+        return [];
+      }
+    });
+
+    // Wait for batch downloads with concurrency limit
+    const batchResults = await parallelLimit(downloadPromises, opts.maxConcurrency);
+    // Flatten the array of arrays (each download can return multiple IconData)
+    const flatResults = batchResults.flat().filter((item): item is IconData => item !== null);
+    iconDataList.push(...flatResults);
   }
 
   const duration = Date.now() - startTime;
@@ -174,8 +166,8 @@ export async function exportPngImages(
   // Log errors if any
   if (errors.length > 0) {
     console.warn(`Failed to export ${errors.length} icon(s):`);
-    for (const { nodeId, error } of errors.slice(0, 5)) {
-      console.warn(`  - ${nodeId}: ${error}`);
+    for (const { exportId, error } of errors.slice(0, 5)) {
+      console.warn(`  - ${exportId}: ${error}`);
     }
     if (errors.length > 5) {
       console.warn(`  ... and ${errors.length - 5} more`);
@@ -192,31 +184,13 @@ export async function exportPngImages(
 
   return {
     items: iconDataList,
+    failures: buildExportFailures(errors, exportIdMap, iconMetadata, 'png'),
     stats,
   };
 }
 
 /**
  * Export SVG images from Figma nodes with parallel downloads
- *
- * @param client - Figma API client
- * @param fileKey - Figma file key
- * @param iconNodes - Icon nodes to export
- * @param iconMetadata - Icon ID to node mapping
- * @param options - Parallel download options
- * @returns Export result with SVG icon data
- * @throws SpriteError on export failures
- *
- * @example
- * ```typescript
- * const result = await exportSvgImages(
- *   client,
- *   'AbCdEf123456',
- *   iconNodes,
- *   iconMetadata,
- *   { maxConcurrency: 5 }
- * );
- * ```
  */
 export async function exportSvgImages(
   client: FigmaClient,
@@ -236,80 +210,76 @@ export async function exportSvgImages(
   const batches = createBatches(uniqueExportIds, opts.batchSize);
 
   const svgDataList: SvgIconData[] = [];
-  const errors: Array<{ nodeId: string; error: string }> = [];
+  const errors: Array<{ exportId: string; error: string }> = [];
 
   // Process batches sequentially
   for (const batch of batches) {
-    try {
-      // Request export URLs for batch
-      const imagesResponse = await client.exportImages(fileKey, {
-        ids: batch,
+    const imagesResponse = await exportWithBatchFallback(
+      client,
+      fileKey,
+      batch,
+      {
         format: 'svg',
         svg_include_id: true,
         svg_simplify_stroke: true,
-      });
+      },
+      errors,
+    );
 
-      // Download SVGs in parallel (within batch)
-      const downloadPromises = Object.entries(imagesResponse.images).map(async ([exportId, url]) => {
-        if (!url) {
-          errors.push({ nodeId: exportId, error: 'Export URL is null' });
-          return [];
-        }
-
-        try {
-          const buffer = await client.downloadImage(url);
-          const svgContent = buffer.toString('utf-8');
-
-          // Find ALL icons that share this exportId (multiple instances of same component)
-          const iconIds = exportIdMap.get(exportId) || [];
-
-          if (iconIds.length === 0) {
-            errors.push({ nodeId: exportId, error: 'No icons found for this exportId' });
-            return [];
-          }
-
-          // Create SvgIconData for each icon sharing this exportId
-          const svgDataArray: SvgIconData[] = iconIds
-            .map((iconId) => {
-              const metadata = iconMetadata.get(iconId);
-              if (!metadata) {
-                // This should never happen as we built exportIdMap from iconMetadata
-                console.warn(`⚠️  Icon metadata missing for ${iconId}`);
-                return null;
-              }
-              // Extract viewBox from SVG
-              const viewBox = extractViewBox(svgContent, metadata.bounds.width, metadata.bounds.height);
-
-              return {
-                id: iconId,
-                content: svgContent,
-                viewBox,
-                width: metadata.bounds.width,
-                height: metadata.bounds.height,
-              };
-            })
-            .filter((item): item is SvgIconData => item !== null);
-
-          return svgDataArray;
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          errors.push({ nodeId: exportId, error: errorMessage });
-          return [];
-        }
-      });
-
-      // Wait for batch downloads with concurrency limit
-      const batchResults = await parallelLimit(downloadPromises, opts.maxConcurrency);
-      // Flatten the array of arrays (each download can return multiple SvgIconData)
-      const flatResults = batchResults.flat().filter((item): item is SvgIconData => item !== null);
-      svgDataList.push(...flatResults);
-    } catch (error) {
-      // Batch export failed
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      for (const nodeId of batch) {
-        errors.push({ nodeId, error: errorMessage });
+    // Download SVGs in parallel (within batch)
+    const downloadPromises = Object.entries(imagesResponse.images).map(async ([exportId, url]) => {
+      if (!url) {
+        errors.push({ exportId, error: 'Export URL is null' });
+        return [];
       }
-    }
+
+      try {
+        const buffer = await client.downloadImage(url);
+        const svgContent = buffer.toString('utf-8');
+
+        // Find ALL icons that share this exportId (multiple instances of same component)
+        const iconIds = exportIdMap.get(exportId) || [];
+
+        if (iconIds.length === 0) {
+          errors.push({ exportId, error: 'No icons found for this exportId' });
+          return [];
+        }
+
+        // Create SvgIconData for each icon sharing this exportId
+        const svgDataArray: SvgIconData[] = iconIds
+          .map((iconId) => {
+            const metadata = iconMetadata.get(iconId);
+            if (!metadata) {
+              // This should never happen as we built exportIdMap from iconMetadata
+              console.warn(`Warning: Icon metadata missing for ${iconId}`);
+              return null;
+            }
+            // Extract viewBox from SVG
+            const viewBox = extractViewBox(svgContent, metadata.bounds.width, metadata.bounds.height);
+
+            return {
+              id: iconId,
+              content: svgContent,
+              viewBox,
+              width: normalizeSize(metadata.bounds.width),
+              height: normalizeSize(metadata.bounds.height),
+            };
+          })
+          .filter((item): item is SvgIconData => item !== null);
+
+        return svgDataArray;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        errors.push({ exportId, error: errorMessage });
+        return [];
+      }
+    });
+
+    // Wait for batch downloads with concurrency limit
+    const batchResults = await parallelLimit(downloadPromises, opts.maxConcurrency);
+    // Flatten the array of arrays (each download can return multiple SvgIconData)
+    const flatResults = batchResults.flat().filter((item): item is SvgIconData => item !== null);
+    svgDataList.push(...flatResults);
   }
 
   const duration = Date.now() - startTime;
@@ -323,8 +293,8 @@ export async function exportSvgImages(
   // Log errors if any
   if (errors.length > 0) {
     console.warn(`Failed to export ${errors.length} SVG(s):`);
-    for (const { nodeId, error } of errors.slice(0, 5)) {
-      console.warn(`  - ${nodeId}: ${error}`);
+    for (const { exportId, error } of errors.slice(0, 5)) {
+      console.warn(`  - ${exportId}: ${error}`);
     }
     if (errors.length > 5) {
       console.warn(`  ... and ${errors.length - 5} more`);
@@ -341,8 +311,79 @@ export async function exportSvgImages(
 
   return {
     items: svgDataList,
+    failures: buildExportFailures(errors, exportIdMap, iconMetadata, 'svg'),
     stats,
   };
+}
+
+/**
+ * Request export URLs for a batch and fallback to single-ID requests when batch fails.
+ * This prevents one invalid node/component reference from failing the whole batch.
+ */
+async function exportWithBatchFallback(
+  client: FigmaClient,
+  fileKey: string,
+  ids: string[],
+  options: ExportRequestOptions,
+  errors: Array<{ exportId: string; error: string }>,
+): Promise<{ images: Record<string, string | null> }> {
+  try {
+    const response = await client.exportImages(fileKey, { ids, ...options });
+    return { images: response.images };
+  } catch (error) {
+    if (ids.length === 1) {
+      errors.push({
+        exportId: ids[0],
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return { images: {} };
+    }
+
+    const images: Record<string, string | null> = {};
+    for (const id of ids) {
+      try {
+        const single = await client.exportImages(fileKey, { ids: [id], ...options });
+        images[id] = single.images[id] ?? null;
+      } catch (singleError) {
+        errors.push({
+          exportId: id,
+          error: singleError instanceof Error ? singleError.message : String(singleError),
+        });
+      }
+    }
+
+    return { images };
+  }
+}
+
+function buildExportFailures(
+  errors: Array<{ exportId: string; error: string }>,
+  exportIdMap: Map<string, string[]>,
+  iconMetadata: Map<string, ParsedIconNode>,
+  format: 'png' | 'svg',
+): ExportFailure[] {
+  const dedup = new Map<string, ExportFailure>();
+
+  for (const { exportId, error } of errors) {
+    if (dedup.has(exportId)) {
+      continue;
+    }
+
+    const iconIds = exportIdMap.get(exportId) ?? [];
+    const nodeIds = iconIds
+      .map((iconId) => iconMetadata.get(iconId)?.nodeId)
+      .filter((nodeId): nodeId is string => Boolean(nodeId));
+
+    dedup.set(exportId, {
+      format,
+      exportId,
+      iconIds,
+      nodeIds,
+      reason: error,
+    });
+  }
+
+  return Array.from(dedup.values());
 }
 
 /**
@@ -395,26 +436,15 @@ function extractViewBox(svgContent: string, width: number, height: number): stri
   return `0 0 ${Math.round(width)} ${Math.round(height)}`;
 }
 
+function normalizeSize(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) {
+    return 1;
+  }
+  return Math.ceil(value);
+}
+
 /**
  * Export both PNG and SVG images based on config
- *
- * @param client - Figma API client
- * @param fileKey - Figma file key
- * @param iconNodes - Icon nodes to export
- * @param iconMetadata - Icon ID to node mapping
- * @param config - Sprite configuration
- * @returns Export results for both formats
- *
- * @example
- * ```typescript
- * const { png, svg } = await exportImages(
- *   client,
- *   'AbCdEf123456',
- *   iconNodes,
- *   iconMetadata,
- *   config
- * );
- * ```
  */
 export async function exportImages(
   client: FigmaClient,

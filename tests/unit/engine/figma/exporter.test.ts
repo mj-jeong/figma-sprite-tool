@@ -79,6 +79,7 @@ describe('Figma exporter', () => {
       );
 
       expect(result.items).toHaveLength(2);
+      expect(result.failures).toHaveLength(0);
       expect(result.stats.successful).toBe(2);
       expect(result.stats.failed).toBe(0);
 
@@ -120,6 +121,7 @@ describe('Figma exporter', () => {
       );
 
       expect(result.items).toHaveLength(1); // Only successful one
+      expect(result.failures.length).toBeGreaterThanOrEqual(1);
       expect(result.stats.successful).toBe(1);
       expect(result.stats.failed).toBe(1);
       expect(consoleWarnSpy).toHaveBeenCalled();
@@ -152,6 +154,7 @@ describe('Figma exporter', () => {
       );
 
       expect(result.items).toHaveLength(1);
+      expect(result.failures.length).toBeGreaterThanOrEqual(1);
       expect(result.stats.successful).toBe(1);
       expect(result.stats.failed).toBe(1);
 
@@ -226,6 +229,40 @@ describe('Figma exporter', () => {
       });
       expect(iconData.buffer).toBeInstanceOf(Buffer);
     });
+
+    it('should fallback to per-id exports when batch export fails', async () => {
+      mockClient.exportImages
+        // Initial batch request fails
+        .mockRejectedValueOnce(new Error('Failed to export 2 node(s)'))
+        // Per-id fallback: first succeeds
+        .mockResolvedValueOnce({
+          err: null,
+          images: {
+            '10:1': 'https://example.com/home.png',
+          },
+        })
+        // Per-id fallback: second fails
+        .mockRejectedValueOnce(new Error('Failed to export 1 node(s)'));
+
+      mockClient.downloadImage.mockResolvedValue(createMockPngBuffer());
+      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const result = await exportPngImages(
+        mockClient,
+        'test-file',
+        mockIconNodes,
+        mockIconMetadata,
+        2,
+      );
+
+      expect(result.items).toHaveLength(1);
+      expect(result.failures.length).toBeGreaterThanOrEqual(1);
+      expect(result.stats.successful).toBe(1);
+      expect(result.stats.failed).toBeGreaterThanOrEqual(1);
+      expect(mockClient.exportImages).toHaveBeenCalledTimes(3);
+
+      consoleWarnSpy.mockRestore();
+    });
   });
 
   describe('exportSvgImages', () => {
@@ -249,6 +286,7 @@ describe('Figma exporter', () => {
       );
 
       expect(result.items).toHaveLength(2);
+      expect(result.failures).toHaveLength(0);
       expect(result.stats.successful).toBe(2);
       expect(result.stats.failed).toBe(0);
 
@@ -304,6 +342,39 @@ describe('Figma exporter', () => {
 
       // Should create viewBox from bounds
       expect(result.items[0].viewBox).toBe('0 0 24 24');
+    });
+
+    it('should fallback to per-id exports when SVG batch export fails', async () => {
+      mockClient.exportImages
+        // Initial batch request fails
+        .mockRejectedValueOnce(new Error('Failed to export 2 node(s)'))
+        // Per-id fallback: first succeeds
+        .mockResolvedValueOnce({
+          err: null,
+          images: {
+            '10:1': 'https://example.com/home.svg',
+          },
+        })
+        // Per-id fallback: second fails
+        .mockRejectedValueOnce(new Error('Failed to export 1 node(s)'));
+
+      mockClient.downloadImage.mockResolvedValue(Buffer.from(createMockSvg(24, 24, 'home')));
+      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const result = await exportSvgImages(
+        mockClient,
+        'test-file',
+        mockIconNodes,
+        mockIconMetadata,
+      );
+
+      expect(result.items).toHaveLength(1);
+      expect(result.failures.length).toBeGreaterThanOrEqual(1);
+      expect(result.stats.successful).toBe(1);
+      expect(result.stats.failed).toBeGreaterThanOrEqual(1);
+      expect(mockClient.exportImages).toHaveBeenCalledTimes(3);
+
+      consoleWarnSpy.mockRestore();
     });
   });
 

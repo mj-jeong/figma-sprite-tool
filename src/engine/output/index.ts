@@ -14,6 +14,7 @@ export {
 // SCSS generator
 export {
   generateScss,
+  generateMixins,
   validateScssOptions,
   type ScssGenerationOptions,
 } from './scss-generator.js';

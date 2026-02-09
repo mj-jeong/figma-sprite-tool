@@ -3,7 +3,8 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rm, mkdir } from 'node:fs/promises';
+import { rm, mkdir, writeFile as writeFileNode } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { fileExists, readFile, readFileBuffer } from '../../../../src/utils/fs.js';
 import {
   writeOutput,
@@ -12,6 +13,8 @@ import {
   type WriteOutputOptions,
 } from '../../../../src/engine/output/file-writer.js';
 import type { PackedIcon, SpriteSheet, SvgSpriteSheet } from '../../../../src/engine/types/sprite.js';
+
+const nodeRequire = createRequire(import.meta.url);
 
 describe('file-writer', () => {
   const testOutputDir = 'D:\\poc\\figma-sprite-tool\\tests\\fixtures\\output\\test-output';
@@ -67,7 +70,9 @@ describe('file-writer', () => {
       expect(paths.png).toContain('sprite.png');
       expect(paths.png2x).toContain('sprite@2x.png');
       expect(paths.svg).toContain('sprite.svg');
+      expect(paths.svgPreview).toContain('sprite.preview.svg');
       expect(paths.scss).toContain('sprite.scss');
+      expect(paths.mixins).toContain('mixins.scss');
       expect(paths.json).toContain('sprite.json');
     });
 
@@ -107,15 +112,27 @@ describe('file-writer', () => {
         page: 'Design System / Icons',
         pngConfig: { scale: 2, padding: 2 },
         svgConfig: { svgo: true },
+        failedAssets: [
+          {
+            format: 'svg',
+            exportId: '123:456',
+            iconIds: ['ic-home-24-line'],
+            nodeIds: ['123:456'],
+            reason: 'Failed to export node',
+          },
+        ],
       };
 
       const result = await writeOutput(options);
 
       // Check files were created
+      expect(result.effectiveOutputName).toBe('sprite');
       expect(await fileExists(result.files.png)).toBe(true);
       expect(await fileExists(result.files.png2x)).toBe(true);
       expect(await fileExists(result.files.svg)).toBe(true);
+      expect(await fileExists(result.files.svgPreview)).toBe(true);
       expect(await fileExists(result.files.scss)).toBe(true);
+      expect(await fileExists(result.files.mixins)).toBe(true);
       expect(await fileExists(result.files.json)).toBe(true);
 
       // Check PNG content
@@ -129,12 +146,20 @@ describe('file-writer', () => {
       // Check SCSS content
       const scssContent = await readFile(result.files.scss);
       expect(scssContent).toContain('$sprite-image:');
-      expect(scssContent).toContain('@mixin sprite-icon');
+      expect(scssContent).toContain('$icons: (');
+      expect(scssContent).not.toContain('@mixin ');
+
+      // Check mixins content
+      const mixinsContent = await readFile(result.files.mixins);
+      expect(mixinsContent).toContain('@mixin sprite-png(');
+      expect(mixinsContent).toContain('@mixin sprite-svg(');
+      expect(mixinsContent).toContain('@error "Sprite icon `#{$name}` not found."');
 
       // Check JSON content
       const jsonContent = await readFile(result.files.json);
       const json = JSON.parse(jsonContent);
       expect(json.meta.fileKey).toBe('AbCdEf123456');
+      expect(json.meta.failedAssets.total).toBe(1);
       expect(json.icons['ic-home-24-line']).toBeDefined();
     });
 
@@ -163,7 +188,9 @@ describe('file-writer', () => {
       expect(result.stats.spriteHeight).toBe(512);
       expect(result.stats.fileSize.png).toBeGreaterThan(0);
       expect(result.stats.fileSize.svg).toBeGreaterThan(0);
+      expect(result.stats.fileSize.svgPreview).toBeGreaterThan(0);
       expect(result.stats.fileSize.scss).toBeGreaterThan(0);
+      expect(result.stats.fileSize.mixins).toBeGreaterThan(0);
       expect(result.stats.fileSize.json).toBeGreaterThan(0);
 
       // Check hashes
@@ -243,6 +270,72 @@ describe('file-writer', () => {
 
       // Clean up
       await rm(windowsPath, { recursive: true, force: true });
+    });
+
+    it('should avoid overwrite by incrementing output name suffix', async () => {
+      const existingPngPath = `${testOutputDir}\\sprite.png`;
+      await writeFileNode(existingPngPath, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+
+      const options: WriteOutputOptions = {
+        outputDir: testOutputDir,
+        outputName: 'sprite',
+        pngSprite: {
+          buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47]),
+          sheet: mockSpriteSheet,
+        },
+        svgSprite: mockSvgSprite,
+        fileKey: 'test',
+        page: 'test',
+        pngConfig: { scale: 2, padding: 2 },
+        svgConfig: { svgo: true },
+      };
+
+      const result = await writeOutput(options);
+
+      expect(result.effectiveOutputName).toBe('sprite(1)');
+      expect(result.files.png).toContain('sprite(1).png');
+      expect(await fileExists(result.files.png)).toBe(true);
+      expect(await fileExists(existingPngPath)).toBe(true);
+    });
+
+    it('should compile generated SCSS when sass is available', async () => {
+      let sass: any = null;
+      try {
+        sass = nodeRequire('sass');
+      } catch {
+        // Optional QA check: skip when sass is not installed in the environment.
+        return;
+      }
+
+      const options: WriteOutputOptions = {
+        outputDir: testOutputDir,
+        outputName: 'sprite',
+        pngSprite: {
+          buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47]),
+          sheet: mockSpriteSheet,
+        },
+        svgSprite: mockSvgSprite,
+        fileKey: 'test',
+        page: 'test',
+        pngConfig: { scale: 1, padding: 2 },
+        svgConfig: { svgo: true },
+      };
+
+      const result = await writeOutput(options);
+
+      const entry = [
+        '@import "sprite.scss";',
+        '@import "mixins.scss";',
+        '.icon-home {',
+        '  @include sprite-png("ic-home-24-line");',
+        '}',
+      ].join('\n');
+
+      const compiled = sass.compileString(entry, {
+        loadPaths: [result.files.scss.replace('/sprite.scss', '')],
+      });
+
+      expect(compiled.css).toContain('.icon-home');
     });
   });
 

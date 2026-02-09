@@ -43,8 +43,9 @@ interface ScssTemplateData {
   }>;
 }
 
-// Cache compiled template
-let compiledTemplate: HandlebarsTemplateDelegate<ScssTemplateData> | null = null;
+// Cache compiled templates
+let compiledSpriteTemplate: HandlebarsTemplateDelegate<ScssTemplateData> | null = null;
+let compiledMixinsTemplate: HandlebarsTemplateDelegate<ScssTemplateData> | null = null;
 
 /**
  * Load and compile SCSS template
@@ -55,9 +56,14 @@ let compiledTemplate: HandlebarsTemplateDelegate<ScssTemplateData> | null = null
  * @returns Compiled Handlebars template
  * @throws SpriteError if template loading fails
  */
-async function loadTemplate(): Promise<HandlebarsTemplateDelegate<ScssTemplateData>> {
-  if (compiledTemplate) {
-    return compiledTemplate;
+async function loadTemplate(
+  fileName: 'sprite.scss.hbs' | 'mixins.scss.hbs'
+): Promise<HandlebarsTemplateDelegate<ScssTemplateData>> {
+  if (fileName === 'sprite.scss.hbs' && compiledSpriteTemplate) {
+    return compiledSpriteTemplate;
+  }
+  if (fileName === 'mixins.scss.hbs' && compiledMixinsTemplate) {
+    return compiledMixinsTemplate;
   }
 
   try {
@@ -65,12 +71,14 @@ async function loadTemplate(): Promise<HandlebarsTemplateDelegate<ScssTemplateDa
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = getDirname(__filename);
     const candidatePaths = [
-      // When running from built dist (templates copied next to dist)
-      resolvePath('./templates/scss/sprite.scss.hbs', process.cwd()),
+      // Installed package / built output (dist/index.js + dist/templates)
+      resolvePath(`./templates/scss/${fileName}`, __dirname),
+      // Non-bundled dist fallback (dist/engine/output + dist/templates)
+      resolvePath(`../../templates/scss/${fileName}`, __dirname),
       // When running from source tree
-      resolvePath('./src/templates/scss/sprite.scss.hbs', process.cwd()),
-      // Fallback to relative path from this file (dev)
-      resolvePath('../../templates/scss/sprite.scss.hbs', __dirname),
+      resolvePath(`./src/templates/scss/${fileName}`, process.cwd()),
+      // Last-resort fallback for unusual cwd setups
+      resolvePath(`./templates/scss/${fileName}`, process.cwd()),
     ];
 
     let templateContent: string | null = null;
@@ -89,12 +97,18 @@ async function loadTemplate(): Promise<HandlebarsTemplateDelegate<ScssTemplateDa
     }
 
     // Compile template
-    compiledTemplate = Handlebars.compile(templateContent, {
+    const compiled = Handlebars.compile(templateContent, {
       strict: true,
       noEscape: true, // SCSS doesn't need HTML escaping
     });
 
-    return compiledTemplate;
+    if (fileName === 'sprite.scss.hbs') {
+      compiledSpriteTemplate = compiled;
+    } else {
+      compiledMixinsTemplate = compiled;
+    }
+
+    return compiled;
   } catch (error) {
     throw createOutputError(
       ErrorCode.TEMPLATE_ERROR,
@@ -155,7 +169,7 @@ function transformIconData(icons: PackedIcon[]): ScssTemplateData['icons'] {
 export async function generateScss(options: ScssGenerationOptions): Promise<string> {
   try {
     // Load template
-    const template = await loadTemplate();
+    const template = await loadTemplate('sprite.scss.hbs');
 
     // Transform icon data
     const icons = transformIconData(options.icons);
@@ -181,6 +195,44 @@ export async function generateScss(options: ScssGenerationOptions): Promise<stri
     throw createOutputError(
       ErrorCode.TEMPLATE_ERROR,
       'Failed to generate SCSS',
+      {
+        error: error instanceof Error ? error.message : String(error),
+      }
+    );
+  }
+}
+
+/**
+ * Generate SCSS mixins file content
+ *
+ * Creates mixins.scss for sprite usage APIs.
+ *
+ * @param options - SCSS generation options
+ * @returns Generated SCSS content
+ * @throws SpriteError on template errors
+ */
+export async function generateMixins(options: ScssGenerationOptions): Promise<string> {
+  try {
+    const template = await loadTemplate('mixins.scss.hbs');
+    const icons = transformIconData(options.icons);
+
+    const data: ScssTemplateData = {
+      spriteImage: options.spriteImage,
+      spriteImage2x: options.spriteImage2x,
+      spriteWidth: options.spriteWidth,
+      spriteHeight: options.spriteHeight,
+      icons,
+    };
+
+    return template(data);
+  } catch (error) {
+    if (error instanceof Error && error.name === 'SpriteError') {
+      throw error;
+    }
+
+    throw createOutputError(
+      ErrorCode.TEMPLATE_ERROR,
+      'Failed to generate mixins SCSS',
       {
         error: error instanceof Error ? error.message : String(error),
       }

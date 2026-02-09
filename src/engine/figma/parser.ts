@@ -7,13 +7,12 @@ import type {
   FigmaNode,
   FigmaFileResponse,
   FigmaFrameNode,
-  FigmaInstanceNode,
   ParsedIconNode,
   IconFilterCriteria,
   FigmaNodeType,
 } from '../types/figma.js';
 import type { SpriteConfig } from '../types/config.js';
-import { SpriteError, ErrorCode, createFigmaError, createValidationError } from '../../utils/errors.js';
+import { ErrorCode, createFigmaError, createValidationError } from '../../utils/errors.js';
 
 /**
  * Parse Figma file and extract icon nodes
@@ -51,7 +50,7 @@ export function parseIconNodes(fileResponse: FigmaFileResponse, config: SpriteCo
   };
 
   // Extract and filter icon nodes
-  const iconNodes = extractIconNodes(fileResponse, targetPage, filterCriteria);
+  const iconNodes = extractIconNodes(targetPage, filterCriteria);
 
   if (iconNodes.length === 0) {
     throw createValidationError(ErrorCode.EMPTY_ICON_SET, 'No icons found matching filter criteria', {
@@ -134,7 +133,6 @@ function listAvailablePages(document: FigmaNode): string[] {
  * Extract icon nodes from page based on filter criteria
  */
 function extractIconNodes(
-  fileResponse: FigmaFileResponse,
   page: FigmaNode,
   criteria: IconFilterCriteria,
 ): ParsedIconNode[] {
@@ -145,33 +143,10 @@ function extractIconNodes(
     if (isIconNode(node, criteria)) {
       const frameNode = node as FigmaFrameNode;
 
-      // For INSTANCE nodes, validate componentId exists
-      if (node.type === 'INSTANCE') {
-        const instanceNode = node as FigmaInstanceNode;
-
-        if (!instanceNode.componentId) {
-          console.warn(
-            `⚠️  INSTANCE node "${node.name}" (${node.id}) has no componentId - skipping`
-          );
-          return; // Skip this node
-        }
-
-        // Check if component exists in components section
-        if (fileResponse.components && !fileResponse.components[instanceNode.componentId]) {
-          console.warn(
-            `⚠️  INSTANCE "${node.name}" (${node.id}) references missing component ${instanceNode.componentId}`
-          );
-          console.warn(
-            `    This may be an external library component. Export may fail.`
-          );
-        }
-      }
-
-      // For INSTANCE nodes, use componentId for export (the original component)
-      // For other nodes (FRAME, COMPONENT), use the node's own ID
-      const exportId = node.type === 'INSTANCE' && node.componentId
-        ? node.componentId
-        : node.id;
+      // Export INSTANCE by node.id to preserve per-instance appearance.
+      // componentId can point to inaccessible external libraries and may
+      // not reflect variant/property overrides on the instance.
+      const exportId = node.id;
 
       iconNodes.push({
         nodeId: node.id,

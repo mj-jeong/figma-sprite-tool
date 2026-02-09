@@ -15,6 +15,7 @@ const nonexistentPath = join(fixturesDir, 'nonexistent.json');
 const presetSimpleConfigPath = join(fixturesDir, 'preset.config.json');
 const presetWithSizeConfigPath = join(fixturesDir, 'preset-with-size.config.json');
 const presetWithVariantsConfigPath = join(fixturesDir, 'preset-with-variants.config.json');
+const legacyOutputDirectoryConfigPath = join(fixturesDir, 'legacy-output-directory.config.json');
 
 describe('loadConfigFromPath', () => {
   it('should load valid config file', async () => {
@@ -137,6 +138,13 @@ describe('Config loading with different formats', () => {
     expect(config.formats.png.scale).toBe(2);
     expect(config.formats.png.padding).toBe(2);
     expect(config.naming.idFormat).toBe('{name}-{size}-{style}{theme?--{theme}}');
+  });
+
+  it('should support legacy output.directory key', async () => {
+    const config = await loadConfigFromPath(legacyOutputDirectoryConfigPath);
+
+    expect(config.output.dir).toBe('./legacy-sprites');
+    expect(config.output.name).toBe('sprite');
   });
 });
 

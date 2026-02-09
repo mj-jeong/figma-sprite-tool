@@ -6,7 +6,7 @@ import type { ParsedIconNode } from '../types/figma.js';
 
 /**
  * Group icons by their export ID to deduplicate API requests
- * Multiple icon instances may share the same componentId
+ * Multiple icon IDs may still share the same export target
  *
  * @param iconMetadata - Map of icon IDs to parsed icon nodes
  * @returns Map of export IDs to array of icon IDs that share that export ID
@@ -14,15 +14,16 @@ import type { ParsedIconNode } from '../types/figma.js';
  * @example
  * ```typescript
  * const metadata = new Map([
- *   ['icon-1', { exportId: 'comp-A', ... }],
- *   ['icon-2', { exportId: 'comp-A', ... }],
- *   ['icon-3', { exportId: 'comp-B', ... }]
+ *   ['icon-1', { exportId: '10:1', ... }],
+ *   ['icon-2', { exportId: '10:2', ... }],
+ *   ['icon-3', { exportId: '10:3', ... }]
  * ]);
  *
  * const grouped = groupByExportId(metadata);
  * // Returns: Map {
- * //   'comp-A' => ['icon-1', 'icon-2'],
- * //   'comp-B' => ['icon-3']
+ * //   '10:1' => ['icon-1'],
+ * //   '10:2' => ['icon-2'],
+ * //   '10:3' => ['icon-3']
  * // }
  * ```
  */

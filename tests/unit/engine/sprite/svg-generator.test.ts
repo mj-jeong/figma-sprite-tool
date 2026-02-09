@@ -5,6 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   generateSvgSprite,
+  generateSvgSpritePreview,
   createSvgIconData,
   batchCreateSvgIconData,
   validateSvgIcons,
@@ -198,11 +199,69 @@ describe('svg-generator', () => {
       const sprite = await generateSvgSprite(icons, { optimize: false });
 
       expect(sprite.icons).toHaveLength(2);
-      expect(sprite.content).toContain('<svg xmlns="http://www.w3.org/2000/svg">');
+      expect(sprite.content).toContain('<svg xmlns="http://www.w3.org/2000/svg"');
+      expect(sprite.content).toContain('viewBox="0 0');
+      expect(sprite.content).toContain('width="');
+      expect(sprite.content).toContain('height="');
       expect(sprite.content).toContain('<symbol id="ic-home-24" viewBox="0 0 24 24">');
       expect(sprite.content).toContain('<symbol id="ic-search-24" viewBox="0 0 24 24">');
       expect(sprite.content).toContain('</svg>');
       expect(sprite.hash).toHaveLength(8);
+    });
+
+    it('should generate preview SVG with expanded viewBox that contains all icons', async () => {
+      const icons: SvgIconData[] = [
+        {
+          id: 'ic-home-24',
+          content: createTestSvg('ic-home-24', 24, 'circle'),
+          viewBox: '0 0 24 24',
+          width: 24,
+          height: 24,
+        },
+        {
+          id: 'ic-large-96',
+          content: createTestSvg('ic-large-96', 96, 'rect'),
+          viewBox: '0 0 96 96',
+          width: 96,
+          height: 96,
+        },
+        {
+          id: 'ic-medium-48',
+          content: createTestSvg('ic-medium-48', 48, 'circle'),
+          viewBox: '0 0 48 48',
+          width: 48,
+          height: 48,
+        },
+      ];
+
+      const sprite = await generateSvgSprite(icons, { optimize: false });
+      const preview = generateSvgSpritePreview(sprite);
+
+      expect(preview).toContain('viewBox="0 0');
+      expect(preview).toContain('width="');
+      expect(preview).toContain('height="');
+      expect(preview).toContain('<use href="#ic-home-24"');
+      expect(preview).toContain('<use href="#ic-large-96"');
+      expect(preview).toContain('<use href="#ic-medium-48"');
+    });
+
+    it('should use viewBox dimensions for preview sizing when width/height differ', async () => {
+      const icons: SvgIconData[] = [
+        {
+          id: 'ic-mismatch',
+          content: '<svg viewBox="0 0 24 24"><rect width="24" height="24"/></svg>',
+          viewBox: '0 0 24 24',
+          width: 16,
+          height: 16,
+        },
+      ];
+
+      const sprite = await generateSvgSprite(icons, { optimize: false });
+      const preview = generateSvgSpritePreview(sprite);
+
+      expect(preview).toContain('<use href="#ic-mismatch"');
+      expect(preview).toContain('width="24"');
+      expect(preview).toContain('height="24"');
     });
 
     it('should sort icons by ID deterministically', async () => {

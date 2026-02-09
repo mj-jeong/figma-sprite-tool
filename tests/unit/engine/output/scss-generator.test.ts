@@ -5,6 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   generateScss,
+  generateMixins,
   validateScssOptions,
   type ScssGenerationOptions,
 } from '../../../../src/engine/output/scss-generator.js';
@@ -24,7 +25,7 @@ describe('scss-generator', () => {
   };
 
   describe('generateScss', () => {
-    it('should generate valid SCSS content', async () => {
+    it('should generate data-only SCSS content', async () => {
       const options: ScssGenerationOptions = {
         spriteImage: './sprite.png',
         spriteImage2x: './sprite@2x.png',
@@ -48,22 +49,7 @@ describe('scss-generator', () => {
       // Check icons map
       expect(scss).toContain('$icons: (');
       expect(scss).toContain('"ic-home-24-line": (x: 12px, y: 8px, w: 24px, h: 24px)');
-
-      // Check helper function
-      expect(scss).toContain('@function _icon($name)');
-      expect(scss).toContain('map-get($icons, $name)');
-
-      // Check mixin
-      expect(scss).toContain('@mixin sprite-icon($name)');
-      expect(scss).toContain('background-image: url(#{$sprite-image})');
-      expect(scss).toContain('background-repeat: no-repeat');
-
-      // Check error handling
-      expect(scss).toContain('@error "Sprite icon `#{$name}` not found."');
-
-      // Check retina media query
-      expect(scss).toContain('@media (-webkit-min-device-pixel-ratio: 2)');
-      expect(scss).toContain('background-image: url(#{$sprite-image-2x})');
+      expect(scss).not.toContain('@mixin ');
     });
 
     it('should sort icons alphabetically by ID', async () => {
@@ -153,7 +139,7 @@ describe('scss-generator', () => {
       expect(scss).toContain('"ic-arrow-right-24-line"');
     });
 
-    it('should maintain template structure', async () => {
+    it('should maintain sprite template structure', async () => {
       const options: ScssGenerationOptions = {
         spriteImage: './sprite.png',
         spriteImage2x: './sprite@2x.png',
@@ -168,15 +154,52 @@ describe('scss-generator', () => {
       const headerIndex = scss.indexOf('// Auto-generated');
       const variablesIndex = scss.indexOf('$sprite-image:');
       const iconsMapIndex = scss.indexOf('$icons: (');
-      const functionIndex = scss.indexOf('@function _icon');
-      const mixinIndex = scss.indexOf('@mixin sprite-icon');
-      const mediaQueryIndex = scss.indexOf('@media (');
 
       expect(headerIndex).toBeLessThan(variablesIndex);
       expect(variablesIndex).toBeLessThan(iconsMapIndex);
-      expect(iconsMapIndex).toBeLessThan(functionIndex);
-      expect(functionIndex).toBeLessThan(mixinIndex);
-      expect(mixinIndex).toBeLessThan(mediaQueryIndex);
+    });
+  });
+
+  describe('generateMixins', () => {
+    it('should generate mixins SCSS APIs for PNG and SVG', async () => {
+      const options: ScssGenerationOptions = {
+        spriteImage: './sprite.png',
+        spriteImage2x: './sprite@2x.png',
+        spriteWidth: 1024,
+        spriteHeight: 512,
+        icons: [mockIcon],
+      };
+
+      const scss = await generateMixins(options);
+
+      expect(scss).toContain('@function _icon($name)');
+      expect(scss).toContain('@mixin sprite-png($name, $unit: px, $rem-base: 10)');
+      expect(scss).toContain('@mixin sprite-png-image($icon, $unit: px, $rem-base: 10)');
+      expect(scss).toContain('@mixin sprite-png-position($icon, $unit: px, $rem-base: 10)');
+      expect(scss).toContain('@mixin sprite-png-size($icon, $unit: px, $rem-base: 10)');
+      expect(scss).toContain('@mixin sprite-svg($name, $unit: px, $rem-base: 10, $image: $sprite-svg-image)');
+      expect(scss).toContain('@mixin sprite-svg-image($icon, $unit: px, $rem-base: 10, $image: $sprite-svg-image)');
+      expect(scss).toContain('@mixin sprite-svg-position($icon, $unit: px, $rem-base: 10)');
+      expect(scss).toContain('@mixin sprite-svg-size($icon, $unit: px, $rem-base: 10)');
+      expect(scss).toContain('@error "Sprite icon `#{$name}` not found."');
+    });
+
+    it('should reference sprite data variables for import-based usage', async () => {
+      const options: ScssGenerationOptions = {
+        spriteImage: './sprite.png',
+        spriteImage2x: './sprite@2x.png',
+        spriteWidth: 1024,
+        spriteHeight: 512,
+        icons: [mockIcon],
+      };
+
+      const spriteScss = await generateScss(options);
+      const mixinsScss = await generateMixins(options);
+
+      expect(spriteScss).toContain('$icons: (');
+      expect(mixinsScss).toContain('map-get($icons, $name)');
+      expect(mixinsScss).toContain('background-image: url(#{$sprite-image})');
+      expect(mixinsScss).toContain('background-image: url(#{$sprite-image-2x})');
     });
   });
 

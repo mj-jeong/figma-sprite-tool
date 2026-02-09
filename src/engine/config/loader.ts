@@ -11,6 +11,35 @@ import { resolveIdFormat } from './presets.js';
 import type { SpriteConfig, ConfigPathOptions } from '../types/config.js';
 
 /**
+ * Normalize legacy config keys before schema validation
+ * Supports output.directory -> output.dir migration.
+ */
+function normalizeLegacyConfig(rawConfig: unknown): unknown {
+  if (!rawConfig || typeof rawConfig !== 'object') {
+    return rawConfig;
+  }
+
+  const config = rawConfig as Record<string, unknown>;
+  const output = config.output;
+
+  if (!output || typeof output !== 'object') {
+    return rawConfig;
+  }
+
+  const normalizedOutput = { ...(output as Record<string, unknown>) };
+  const legacyDir = normalizedOutput.directory;
+
+  if (typeof legacyDir === 'string' && !normalizedOutput.dir) {
+    normalizedOutput.dir = legacyDir;
+  }
+
+  delete normalizedOutput.directory;
+  config.output = normalizedOutput;
+
+  return config;
+}
+
+/**
  * Load configuration from file
  */
 export async function loadConfig(options: ConfigPathOptions = {}): Promise<SpriteConfig> {
@@ -66,6 +95,7 @@ export async function loadConfigFromPath(configPath: string): Promise<SpriteConf
   let rawConfig: unknown;
   try {
     rawConfig = JSON.parse(content);
+    rawConfig = normalizeLegacyConfig(rawConfig);
   } catch (error) {
     throw createConfigError(
       ErrorCode.CONFIG_PARSE_FAILED,

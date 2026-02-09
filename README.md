@@ -19,7 +19,13 @@ CLI tool to generate PNG/SVG sprite sheets, SCSS mixins, and JSON metadata from 
 ## Installation
 
 ```bash
-pnpm install
+npm i -g figma-sprite-tool
+```
+
+Without global install:
+
+```bash
+npx figma-sprite --help
 ```
 
 ## Development
@@ -144,13 +150,20 @@ FIGMA_TOKEN=your_token_here figma-sprite generate
 The tool generates the following files:
 
 ```
-assets/sprite/
-├── sprite.png           # 1x PNG sprite sheet
-├── sprite@2x.png        # 2x retina PNG sprite sheet
-├── sprite.svg           # SVG symbol sprite
-├── sprite.scss          # SCSS mixins with retina support
-└── sprite.json          # Metadata with hashes for change detection
+assets/sprite/{Page}/
+├── sprite.png                # 1x PNG sprite sheet
+├── sprite@2x.png             # 2x retina PNG sprite sheet
+├── sprite.svg                # SVG symbol sprite (root viewBox included)
+├── sprite.preview.svg        # Preview grid SVG for viewers
+├── sprite.scss               # Sprite data map
+├── mixins.scss               # PNG/SVG mixin APIs
+└── sprite.json               # Metadata + failedAssets report (if partial failures)
 ```
+
+Notes:
+- Output directory is page-scoped: `{output.dir}/{sanitized-page-name}`.
+- If `sprite.*` already exists, a suffix is applied automatically (`sprite(1)`, `sprite(2)`, ...).
+- If some assets fail export, generation continues with successful assets and failure details are recorded.
 
 ## Architecture
 

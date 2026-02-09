@@ -82,8 +82,8 @@ export async function generatePngSprite(
 
   try {
     // Calculate scaled dimensions
-    const scaledWidth = Math.round(spriteWidth * opts.scale);
-    const scaledHeight = Math.round(spriteHeight * opts.scale);
+    const scaledWidth = Math.max(1, Math.ceil(spriteWidth * opts.scale));
+    const scaledHeight = Math.max(1, Math.ceil(spriteHeight * opts.scale));
 
     // Create transparent canvas
     const canvas = sharp({
@@ -102,21 +102,25 @@ export async function generatePngSprite(
         let processedBuffer = icon.buffer;
 
         if (opts.scale !== opts.inputScale) {
-          const scaledWidth = Math.round(icon.width * opts.scale);
-          const scaledHeight = Math.round(icon.height * opts.scale);
+          const sourceMeta = await sharp(icon.buffer).metadata();
+          const sourceWidth = sourceMeta.width ?? Math.max(1, Math.ceil(icon.width * opts.inputScale));
+          const sourceHeight = sourceMeta.height ?? Math.max(1, Math.ceil(icon.height * opts.inputScale));
+          const resizeRatio = opts.scale / opts.inputScale;
+          const targetWidth = Math.max(1, Math.ceil(sourceWidth * resizeRatio));
+          const targetHeight = Math.max(1, Math.ceil(sourceHeight * resizeRatio));
 
           processedBuffer = await sharp(icon.buffer)
-            .resize(scaledWidth, scaledHeight, {
+            .resize(targetWidth, targetHeight, {
               kernel: sharp.kernel.lanczos3,
-              fit: 'contain',
+              fit: 'fill',
             })
             .toBuffer();
         }
 
         return {
           input: processedBuffer,
-          top: Math.round(icon.y * opts.scale),
-          left: Math.round(icon.x * opts.scale),
+          top: Math.max(0, Math.ceil(icon.y * opts.scale)),
+          left: Math.max(0, Math.ceil(icon.x * opts.scale)),
         };
       })
     );
@@ -255,8 +259,8 @@ export async function generatePngSpriteSheet(
     { scale, inputScale }
   );
 
-  const scaledWidth = Math.round(spriteWidth * scale);
-  const scaledHeight = Math.round(spriteHeight * scale);
+  const scaledWidth = Math.max(1, Math.ceil(spriteWidth * scale));
+  const scaledHeight = Math.max(1, Math.ceil(spriteHeight * scale));
 
   return {
     width: scaledWidth,
@@ -266,10 +270,10 @@ export async function generatePngSpriteSheet(
         ? icon
         : {
             ...icon,
-            x: Math.round(icon.x * scale),
-            y: Math.round(icon.y * scale),
-            width: Math.round(icon.width * scale),
-            height: Math.round(icon.height * scale),
+            x: Math.max(0, Math.ceil(icon.x * scale)),
+            y: Math.max(0, Math.ceil(icon.y * scale)),
+            width: Math.max(1, Math.ceil(icon.width * scale)),
+            height: Math.max(1, Math.ceil(icon.height * scale)),
           }
     ),
     hash,

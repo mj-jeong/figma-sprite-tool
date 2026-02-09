@@ -220,6 +220,22 @@ describe('packer', () => {
       expect(estimated.height).toBe(packed.height);
       expect(estimated.fill).toBe(packed.fill);
     });
+
+    it('should be deterministic regardless of input order', () => {
+      const icons: IconData[] = [
+        createTestIcon('ic-z-24', 24, 24),
+        createTestIcon('ic-a-16', 16, 16),
+        createTestIcon('ic-m-32', 32, 32),
+      ];
+
+      const shuffled = [icons[2], icons[0], icons[1]];
+      const estimatedA = calculateSpriteDimensions(icons, 2);
+      const estimatedB = calculateSpriteDimensions(shuffled, 2);
+
+      expect(estimatedA.width).toBe(estimatedB.width);
+      expect(estimatedA.height).toBe(estimatedB.height);
+      expect(estimatedA.fill).toBe(estimatedB.fill);
+    });
   });
 
   describe('determinism validation', () => {

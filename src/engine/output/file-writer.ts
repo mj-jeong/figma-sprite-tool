@@ -3,11 +3,11 @@
  * Coordinates writing of all output files with Windows path compatibility
  */
 
-import { writeFile, ensureDir } from '../../utils/fs.js';
+import { writeFile, ensureDir, fileExists } from '../../utils/fs.js';
 import { resolvePath, joinPath, normalizePath } from '../../utils/path.js';
 import type { SpriteSheet, SvgSpriteSheet } from '../types/sprite.js';
 import { generateSvgSpritePreview } from '../sprite/svg-generator.js';
-import { generateScss, type ScssGenerationOptions } from './scss-generator.js';
+import { generateScss, generateMixins, type ScssGenerationOptions } from './scss-generator.js';
 import { generateSpriteJson, type JsonGenerationOptions } from './json-generator.js';
 
 /**
@@ -24,6 +24,8 @@ export interface OutputFilePaths {
   svgPreview: string;
   /** SCSS mixin file path */
   scss: string;
+  /** SCSS mixins file path */
+  mixins: string;
   /** JSON metadata file path */
   json: string;
 }
@@ -34,6 +36,8 @@ export interface OutputFilePaths {
 export interface OutputResult {
   /** Generated file paths */
   files: OutputFilePaths;
+  /** Actual output name used (collision-safe) */
+  effectiveOutputName: string;
   /** Content hashes */
   hashes: {
     png: string;
@@ -50,6 +54,7 @@ export interface OutputResult {
       svg: number;
       svgPreview: number;
       scss: number;
+      mixins: number;
       json: number;
     };
   };
@@ -88,6 +93,14 @@ export interface WriteOutputOptions {
   svgConfig: {
     svgo: boolean;
   };
+  /** Failed assets during export (optional) */
+  failedAssets?: Array<{
+    format: 'png' | 'svg';
+    exportId: string;
+    iconIds: string[];
+    nodeIds: string[];
+    reason: string;
+  }>;
 }
 
 /**
@@ -108,8 +121,32 @@ export function buildOutputPaths(outputDir: string, outputName: string): OutputF
     svg: normalizePath(joinPath(dir, `${outputName}.svg`)),
     svgPreview: normalizePath(joinPath(dir, `${outputName}.preview.svg`)),
     scss: normalizePath(joinPath(dir, `${outputName}.scss`)),
+    mixins: normalizePath(joinPath(dir, `mixins.scss`)),
     json: normalizePath(joinPath(dir, `${outputName}.json`)),
   };
+}
+
+async function hasCollision(paths: OutputFilePaths): Promise<boolean> {
+  const candidates = [paths.png, paths.png2x, paths.svg, paths.svgPreview, paths.scss, paths.json];
+  for (const filePath of candidates) {
+    if (await fileExists(filePath)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function resolveAvailableOutputName(outputDir: string, outputName: string): Promise<string> {
+  let index = 0;
+
+  while (true) {
+    const candidateName = index === 0 ? outputName : `${outputName}(${index})`;
+    const candidatePaths = buildOutputPaths(outputDir, candidateName);
+    if (!(await hasCollision(candidatePaths))) {
+      return candidateName;
+    }
+    index += 1;
+  }
 }
 
 /**
@@ -180,6 +217,19 @@ async function writeScssFile(path: string, options: ScssGenerationOptions): Prom
 }
 
 /**
+ * Write SCSS mixins file
+ *
+ * @param path - SCSS mixins file path
+ * @param options - SCSS generation options
+ * @returns File size in bytes
+ */
+async function writeMixinsFile(path: string, options: ScssGenerationOptions): Promise<number> {
+  const scss = await generateMixins(options);
+  await writeFile(path, scss);
+  return Buffer.byteLength(scss, 'utf-8');
+}
+
+/**
  * Write JSON metadata file
  *
  * @param path - JSON file path
@@ -227,8 +277,10 @@ export async function writeOutput(options: WriteOutputOptions): Promise<OutputRe
   // Ensure output directory exists
   await ensureDir(options.outputDir);
 
+  const effectiveOutputName = await resolveAvailableOutputName(options.outputDir, options.outputName);
+
   // Build output file paths
-  const paths = buildOutputPaths(options.outputDir, options.outputName);
+  const paths = buildOutputPaths(options.outputDir, effectiveOutputName);
 
   // Write PNG files
   const pngSizes = await writePngFiles(
@@ -243,8 +295,15 @@ export async function writeOutput(options: WriteOutputOptions): Promise<OutputRe
 
   // Write SCSS file
   const scssSize = await writeScssFile(paths.scss, {
-    spriteImage: `./${options.outputName}.png`,
-    spriteImage2x: `./${options.outputName}@2x.png`,
+    spriteImage: `./${effectiveOutputName}.png`,
+    spriteImage2x: `./${effectiveOutputName}@2x.png`,
+    spriteWidth: options.pngSprite.sheet.width,
+    spriteHeight: options.pngSprite.sheet.height,
+    icons: options.pngSprite.sheet.icons,
+  });
+  const mixinsSize = await writeMixinsFile(paths.mixins, {
+    spriteImage: `./${effectiveOutputName}.png`,
+    spriteImage2x: `./${effectiveOutputName}@2x.png`,
     spriteWidth: options.pngSprite.sheet.width,
     spriteHeight: options.pngSprite.sheet.height,
     icons: options.pngSprite.sheet.icons,
@@ -266,11 +325,13 @@ export async function writeOutput(options: WriteOutputOptions): Promise<OutputRe
       hash: options.svgSprite.hash,
       icons: options.svgSprite.icons,
     },
+    failedAssets: options.failedAssets,
   });
 
   // Build result
   return {
     files: paths,
+    effectiveOutputName,
     hashes: {
       png: options.pngSprite.sheet.hash,
       svg: options.svgSprite.hash,
@@ -285,6 +346,7 @@ export async function writeOutput(options: WriteOutputOptions): Promise<OutputRe
         svg: svgSize,
         svgPreview: svgPreviewSize,
         scss: scssSize,
+        mixins: mixinsSize,
         json: jsonSize,
       },
     },

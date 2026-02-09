@@ -114,7 +114,8 @@ export async function initCommand(): Promise<void> {
       sanitize: true,
     },
     output: {
-      directory: answers.outputDir,
+      dir: answers.outputDir,
+      name: 'sprite',
     },
   };
 

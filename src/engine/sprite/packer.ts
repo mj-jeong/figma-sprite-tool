@@ -64,16 +64,6 @@ export function packIcons(icons: IconData[], padding: number = 2): PackingResult
   }
 
   // Create packed icons with positions (apply padding offset)
-  const packedIcons: PackedIcon[] = sortedIcons.map((icon, index) => {
-    const box = boxes[index];
-
-    return {
-      ...icon,
-      x: box.x + padding, // Offset by padding
-      y: box.y + padding,
-    };
-  });
-
   return {
     width: packResult.w,
     height: packResult.h,
@@ -168,7 +158,9 @@ export function calculateSpriteDimensions(
     return { width: 0, height: 0, fill: 0 };
   }
 
-  const boxes = icons.map((icon) => ({
+  const sortedIcons = [...icons].sort((a, b) => a.id.localeCompare(b.id));
+
+  const boxes = sortedIcons.map((icon) => ({
     w: icon.width + padding * 2,
     h: icon.height + padding * 2,
   }));

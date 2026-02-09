@@ -188,6 +188,36 @@ describe('json-generator', () => {
       expect(json).toContain('  "meta"');
       expect(json).toContain('    "fileKey"');
     });
+
+    it('should include failedAssets metadata when provided', () => {
+      const options: JsonGenerationOptions = {
+        fileKey: 'test',
+        page: 'test',
+        pngSprite: {
+          width: 100,
+          height: 100,
+          hash: 'test',
+          icons: [mockPngIcon],
+        },
+        failedAssets: [
+          {
+            format: 'svg',
+            exportId: '70:71',
+            iconIds: ['close-pop'],
+            nodeIds: ['70:71'],
+            reason: 'Failed to export node',
+          },
+        ],
+      };
+
+      const json = generateSpriteJson(options);
+      const parsed = JSON.parse(json);
+
+      expect(parsed.meta.failedAssets).toBeDefined();
+      expect(parsed.meta.failedAssets.total).toBe(1);
+      expect(parsed.meta.failedAssets.items).toHaveLength(1);
+      expect(parsed.meta.failedAssets.items[0].exportId).toBe('70:71');
+    });
   });
 
   describe('validateJsonOptions', () => {

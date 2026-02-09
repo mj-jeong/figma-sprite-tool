@@ -211,7 +211,7 @@ export interface IconFilterCriteria {
 export interface ParsedIconNode {
   /** Node ID */
   nodeId: string;
-  /** ID to use for export (componentId for INSTANCE, nodeId for others) */
+  /** ID to use for export (always nodeId for visual fidelity) */
   exportId: string;
   /** Node name */
   name: string;

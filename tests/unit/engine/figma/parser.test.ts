@@ -306,7 +306,7 @@ describe('Figma parser', () => {
       const instanceNodes: ParsedIconNode[] = [
         {
           nodeId: '10:1',
-          exportId: 'comp-123', // Same exportId
+          exportId: '10:1',
           name: 'ic/home-24-line',
           type: 'INSTANCE',
           bounds: { x: 0, y: 0, width: 24, height: 24 },
@@ -314,7 +314,7 @@ describe('Figma parser', () => {
         },
         {
           nodeId: '10:2',
-          exportId: 'comp-123', // Same exportId -> same component
+          exportId: '10:2',
           name: 'ic/home-24-line-copy', // Different Figma name
           type: 'INSTANCE',
           bounds: { x: 30, y: 0, width: 24, height: 24 },
@@ -330,7 +330,7 @@ describe('Figma parser', () => {
 
       // Verify first instance is included
       const entries = Array.from(metadata.values());
-      expect(entries[0].exportId).toBe('comp-123');
+      expect(entries[0].exportId).toBe('10:1');
     });
 
     it('should preserve node metadata in map', () => {
@@ -416,6 +416,54 @@ describe('Figma parser', () => {
 
       const id = generateIconId(variants, '{name}{theme?--{theme}}', true);
       expect(id).toBe('home--dark'); // Template's '--' is preserved
+    });
+  });
+
+  describe('instance export ID behavior', () => {
+    it('should use INSTANCE nodeId as exportId', () => {
+      const instanceFile = {
+        document: {
+          id: '0:0',
+          name: 'Document',
+          type: 'DOCUMENT',
+          children: [
+            {
+              id: '1:1',
+              name: 'Design System',
+              type: 'CANVAS',
+              children: [
+                {
+                  id: '2:1',
+                  name: 'Icons',
+                  type: 'FRAME',
+                  children: [
+                    {
+                      id: '3:1',
+                      name: 'ic/home-24-line',
+                      type: 'INSTANCE',
+                      componentId: 'comp:123',
+                      absoluteBoundingBox: { x: 0, y: 0, width: 24, height: 24 },
+                      children: [],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+        components: {
+          'comp:123': {
+            key: 'k',
+            name: 'Component',
+            description: '',
+          },
+        },
+      };
+
+      const nodes = parseIconNodes(instanceFile as any, mockConfig);
+      expect(nodes).toHaveLength(1);
+      expect(nodes[0].nodeId).toBe('3:1');
+      expect(nodes[0].exportId).toBe('3:1');
     });
   });
 });
