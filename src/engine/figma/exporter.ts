@@ -8,6 +8,7 @@ import type { IconData, SvgIconData } from '../types/sprite.js';
 import type { SpriteConfig } from '../types/config.js';
 import { FigmaClient } from './client.js';
 import { SpriteError, ErrorCode, createFigmaError } from '../../utils/errors.js';
+import { groupByExportId } from './utils.js';
 
 /**
  * Parallel download configuration
@@ -78,11 +79,12 @@ export async function exportPngImages(
   const opts = { ...DEFAULT_PARALLEL_OPTIONS, ...options };
   const startTime = Date.now();
 
-  // Create batches of node IDs
-  const batches = createBatches(
-    Array.from(iconMetadata.keys()).map((id) => iconMetadata.get(id)!.nodeId),
-    opts.batchSize,
-  );
+  // Group icons by exportId to avoid duplicate API calls
+  const exportIdMap = groupByExportId(iconMetadata);
+
+  // Create batches of unique export IDs only
+  const uniqueExportIds = Array.from(exportIdMap.keys());
+  const batches = createBatches(uniqueExportIds, opts.batchSize);
 
   const iconDataList: IconData[] = [];
   const errors: Array<{ nodeId: string; error: string }> = [];
@@ -101,46 +103,57 @@ export async function exportPngImages(
       });
 
       // Download images in parallel (within batch)
-      const downloadPromises = Object.entries(imagesResponse.images).map(async ([nodeId, url]) => {
+      const downloadPromises = Object.entries(imagesResponse.images).map(async ([exportId, url]) => {
         if (!url) {
-          errors.push({ nodeId, error: 'Export URL is null' });
-          return null;
+          errors.push({ nodeId: exportId, error: 'Export URL is null' });
+          return [];
         }
 
         try {
           const buffer = await client.downloadImage(url);
 
-          // Find icon metadata for this node
-          const [iconId, metadata] = Array.from(iconMetadata.entries()).find(
-            ([_, node]) => node.nodeId === nodeId,
-          ) || [undefined, undefined];
+          // Find ALL icons that share this exportId (multiple instances of same component)
+          const iconIds = exportIdMap.get(exportId) || [];
 
-          if (!iconId || !metadata) {
-            errors.push({ nodeId, error: 'Metadata not found' });
-            return null;
+          if (iconIds.length === 0) {
+            errors.push({ nodeId: exportId, error: 'No icons found for this exportId' });
+            return [];
           }
 
-          const iconData: IconData = {
-            id: iconId,
-            name: metadata.name,
-            nodeId: metadata.nodeId,
-            variants: {}, // Will be populated by parser
-            width: metadata.bounds.width,
-            height: metadata.bounds.height,
-            buffer,
-          };
+          // Create IconData for each icon sharing this exportId
+          const iconDataArray: IconData[] = iconIds
+            .map((iconId) => {
+              const metadata = iconMetadata.get(iconId);
+              if (!metadata) {
+                // This should never happen as we built exportIdMap from iconMetadata
+                console.warn(`⚠️  Icon metadata missing for ${iconId}`);
+                return null;
+              }
+              return {
+                id: iconId,
+                name: metadata.name,
+                nodeId: metadata.nodeId,
+                variants: {}, // Will be populated by parser
+                width: metadata.bounds.width,
+                height: metadata.bounds.height,
+                buffer,
+              };
+            })
+            .filter((item): item is IconData => item !== null);
 
-          return iconData;
+          return iconDataArray;
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error);
-          errors.push({ nodeId, error: errorMessage });
-          return null;
+          errors.push({ nodeId: exportId, error: errorMessage });
+          return [];
         }
       });
 
       // Wait for batch downloads with concurrency limit
       const batchResults = await parallelLimit(downloadPromises, opts.maxConcurrency);
-      iconDataList.push(...batchResults.filter((item): item is IconData => item !== null));
+      // Flatten the array of arrays (each download can return multiple IconData)
+      const flatResults = batchResults.flat().filter((item): item is IconData => item !== null);
+      iconDataList.push(...flatResults);
     } catch (error) {
       // Batch export failed
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -215,11 +228,12 @@ export async function exportSvgImages(
   const opts = { ...DEFAULT_PARALLEL_OPTIONS, ...options };
   const startTime = Date.now();
 
-  // Create batches of node IDs
-  const batches = createBatches(
-    Array.from(iconMetadata.keys()).map((id) => iconMetadata.get(id)!.nodeId),
-    opts.batchSize,
-  );
+  // Group icons by exportId to avoid duplicate API calls
+  const exportIdMap = groupByExportId(iconMetadata);
+
+  // Create batches of unique export IDs only
+  const uniqueExportIds = Array.from(exportIdMap.keys());
+  const batches = createBatches(uniqueExportIds, opts.batchSize);
 
   const svgDataList: SvgIconData[] = [];
   const errors: Array<{ nodeId: string; error: string }> = [];
@@ -236,48 +250,59 @@ export async function exportSvgImages(
       });
 
       // Download SVGs in parallel (within batch)
-      const downloadPromises = Object.entries(imagesResponse.images).map(async ([nodeId, url]) => {
+      const downloadPromises = Object.entries(imagesResponse.images).map(async ([exportId, url]) => {
         if (!url) {
-          errors.push({ nodeId, error: 'Export URL is null' });
-          return null;
+          errors.push({ nodeId: exportId, error: 'Export URL is null' });
+          return [];
         }
 
         try {
           const buffer = await client.downloadImage(url);
           const svgContent = buffer.toString('utf-8');
 
-          // Find icon metadata for this node
-          const [iconId, metadata] = Array.from(iconMetadata.entries()).find(
-            ([_, node]) => node.nodeId === nodeId,
-          ) || [undefined, undefined];
+          // Find ALL icons that share this exportId (multiple instances of same component)
+          const iconIds = exportIdMap.get(exportId) || [];
 
-          if (!iconId || !metadata) {
-            errors.push({ nodeId, error: 'Metadata not found' });
-            return null;
+          if (iconIds.length === 0) {
+            errors.push({ nodeId: exportId, error: 'No icons found for this exportId' });
+            return [];
           }
 
-          // Extract viewBox from SVG
-          const viewBox = extractViewBox(svgContent, metadata.bounds.width, metadata.bounds.height);
+          // Create SvgIconData for each icon sharing this exportId
+          const svgDataArray: SvgIconData[] = iconIds
+            .map((iconId) => {
+              const metadata = iconMetadata.get(iconId);
+              if (!metadata) {
+                // This should never happen as we built exportIdMap from iconMetadata
+                console.warn(`⚠️  Icon metadata missing for ${iconId}`);
+                return null;
+              }
+              // Extract viewBox from SVG
+              const viewBox = extractViewBox(svgContent, metadata.bounds.width, metadata.bounds.height);
 
-          const svgData: SvgIconData = {
-            id: iconId,
-            content: svgContent,
-            viewBox,
-            width: metadata.bounds.width,
-            height: metadata.bounds.height,
-          };
+              return {
+                id: iconId,
+                content: svgContent,
+                viewBox,
+                width: metadata.bounds.width,
+                height: metadata.bounds.height,
+              };
+            })
+            .filter((item): item is SvgIconData => item !== null);
 
-          return svgData;
+          return svgDataArray;
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error);
-          errors.push({ nodeId, error: errorMessage });
-          return null;
+          errors.push({ nodeId: exportId, error: errorMessage });
+          return [];
         }
       });
 
       // Wait for batch downloads with concurrency limit
       const batchResults = await parallelLimit(downloadPromises, opts.maxConcurrency);
-      svgDataList.push(...batchResults.filter((item): item is SvgIconData => item !== null));
+      // Flatten the array of arrays (each download can return multiple SvgIconData)
+      const flatResults = batchResults.flat().filter((item): item is SvgIconData => item !== null);
+      svgDataList.push(...flatResults);
     } catch (error) {
       // Batch export failed
       const errorMessage = error instanceof Error ? error.message : String(error);

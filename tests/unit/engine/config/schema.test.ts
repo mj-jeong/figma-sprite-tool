@@ -245,3 +245,118 @@ describe('validateField', () => {
     expect(validateField(validConfig, 'nonexistent.field')).toBe(true);
   });
 });
+
+describe('Preset support in schema', () => {
+  const baseConfig = {
+    figma: {
+      fileKey: 'test',
+      page: 'Icons',
+      scope: {
+        type: 'prefix' as const,
+        value: 'ic/',
+      },
+    },
+  };
+
+  it('should accept simple preset name', () => {
+    const config = {
+      ...baseConfig,
+      naming: {
+        idFormat: 'simple',
+      },
+    };
+
+    const result = validateConfig(config);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.naming.idFormat).toBe('simple');
+    }
+  });
+
+  it('should accept with-size preset name', () => {
+    const config = {
+      ...baseConfig,
+      naming: {
+        idFormat: 'with-size',
+      },
+    };
+
+    const result = validateConfig(config);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.naming.idFormat).toBe('with-size');
+    }
+  });
+
+  it('should accept with-variants preset name', () => {
+    const config = {
+      ...baseConfig,
+      naming: {
+        idFormat: 'with-variants',
+      },
+    };
+
+    const result = validateConfig(config);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.naming.idFormat).toBe('with-variants');
+    }
+  });
+
+  it('should accept custom template strings', () => {
+    const config = {
+      ...baseConfig,
+      naming: {
+        idFormat: '{name}-{size}-custom',
+      },
+    };
+
+    const result = validateConfig(config);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.naming.idFormat).toBe('{name}-{size}-custom');
+    }
+  });
+
+  it('should accept any string as custom template', () => {
+    const config = {
+      ...baseConfig,
+      naming: {
+        idFormat: 'icon-{name}',
+      },
+    };
+
+    const result = validateConfig(config);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.naming.idFormat).toBe('icon-{name}');
+    }
+  });
+
+  it('should use simple preset as default', () => {
+    const minimal = {
+      ...baseConfig,
+    };
+
+    const result = validateConfig(minimal);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.naming.idFormat).toBe('simple');
+    }
+  });
+
+  it('should handle legacy template strings', () => {
+    const config = {
+      ...baseConfig,
+      naming: {
+        idFormat: '{name}-{size}-{style}{theme?--{theme}}',
+      },
+    };
+
+    const result = validateConfig(config);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.naming.idFormat).toBe('{name}-{size}-{style}{theme?--{theme}}');
+    }
+  });
+});

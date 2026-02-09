@@ -64,10 +64,29 @@ async function loadTemplate(): Promise<HandlebarsTemplateDelegate<ScssTemplateDa
     // Get template path relative to this file
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = getDirname(__filename);
-    const templatePath = resolvePath('../../templates/scss/sprite.scss.hbs', __dirname);
+    const candidatePaths = [
+      // When running from built dist (templates copied next to dist)
+      resolvePath('./templates/scss/sprite.scss.hbs', process.cwd()),
+      // When running from source tree
+      resolvePath('./src/templates/scss/sprite.scss.hbs', process.cwd()),
+      // Fallback to relative path from this file (dev)
+      resolvePath('../../templates/scss/sprite.scss.hbs', __dirname),
+    ];
 
-    // Load template content
-    const templateContent = await readFile(templatePath);
+    let templateContent: string | null = null;
+    let lastError: unknown = null;
+    for (const candidate of candidatePaths) {
+      try {
+        templateContent = await readFile(candidate);
+        break;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    if (!templateContent) {
+      throw lastError instanceof Error ? lastError : new Error('Template not found');
+    }
 
     // Compile template
     compiledTemplate = Handlebars.compile(templateContent, {

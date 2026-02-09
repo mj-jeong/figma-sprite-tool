@@ -41,13 +41,178 @@ export enum ErrorCode {
 }
 
 /**
+ * Context for orphaned INSTANCE nodes (missing component reference)
+ */
+export interface OrphanedInstanceContext {
+  instanceName: string;
+  instanceId: string;
+  missingComponentId: string;
+  suggestion: string;
+}
+
+/**
+ * Context for duplicate icon IDs
+ */
+export interface DuplicateInfo {
+  id: string;
+  names: string[];
+  nodeIds: string[];
+}
+
+/**
+ * Context for file operation errors
+ */
+export interface FileErrorContext {
+  filePath: string;
+  error?: string;
+}
+
+/**
+ * Context for directory operation errors
+ */
+export interface DirectoryErrorContext {
+  dirPath: string;
+  error?: string;
+}
+
+/**
+ * Context for file copy errors
+ */
+export interface FileCopyErrorContext {
+  src: string;
+  dest: string;
+  error?: string;
+}
+
+/**
+ * Context for Figma export errors
+ */
+export interface FigmaExportErrorContext {
+  fileKey?: string;
+  nodeIds?: string[];
+  failedNodes?: string[];
+  format?: string;
+  error?: string;
+}
+
+/**
+ * Context for image download errors
+ */
+export interface ImageDownloadErrorContext {
+  url: string;
+  status?: number;
+}
+
+/**
+ * Context for network errors
+ */
+export interface NetworkErrorContext {
+  url: string;
+  timeout?: number;
+  originalError?: string;
+}
+
+/**
+ * Context for page not found errors
+ */
+export interface PageNotFoundContext {
+  availablePages: string[];
+  suggestion: string;
+}
+
+/**
+ * Context for empty icon set errors
+ */
+export interface EmptyIconSetContext {
+  page: string;
+  scopeType: string;
+  scopeValue: string;
+  suggestion?: string;
+}
+
+/**
+ * Context for all export failures
+ */
+export interface AllExportsFailedContext {
+  total: number;
+  errors: string[];
+}
+
+/**
+ * Context for config file not found errors
+ */
+export interface ConfigNotFoundContext {
+  searchedPaths?: string[];
+  configPath?: string;
+  cwd?: string;
+}
+
+/**
+ * Context for config validation errors
+ */
+export interface ConfigValidationContext {
+  configPath?: string;
+  error?: string;
+  validationErrors?: string[];
+}
+
+/**
+ * Context for generic errors with suggestion
+ */
+export interface GenericErrorContext {
+  suggestion?: string;
+  retryAfter?: string;
+  status?: number;
+  statusText?: string;
+  recoverable?: boolean;
+  docs?: string;
+  [key: string]: unknown;
+}
+
+/**
+ * Context for duplicate icon errors (contains array of DuplicateInfo)
+ */
+export interface DuplicateIconsContext {
+  duplicates: DuplicateInfo[];
+}
+
+/**
+ * Context for orphaned instance errors (wrapper for OrphanedInstanceContext)
+ */
+export interface OrphanedInstanceErrorContext {
+  orphanedInstance: OrphanedInstanceContext;
+}
+
+/**
+ * Union type for all possible error contexts
+ */
+export type ErrorContext =
+  | OrphanedInstanceContext
+  | OrphanedInstanceErrorContext
+  | DuplicateInfo
+  | DuplicateIconsContext
+  | FileErrorContext
+  | DirectoryErrorContext
+  | FileCopyErrorContext
+  | FigmaExportErrorContext
+  | ImageDownloadErrorContext
+  | NetworkErrorContext
+  | PageNotFoundContext
+  | EmptyIconSetContext
+  | AllExportsFailedContext
+  | ConfigNotFoundContext
+  | ConfigValidationContext
+  | GenericErrorContext
+  | Record<string, never>; // for empty context
+
+/**
  * Base error class for all sprite tool errors
  */
 export class SpriteError extends Error {
   constructor(
     public readonly code: ErrorCode,
     message: string,
-    public readonly context?: Record<string, unknown>,
+    public readonly context?: ErrorContext,
     public readonly recoverable: boolean = false,
   ) {
     super(`[${code}] ${message}`);
@@ -107,6 +272,12 @@ export class SpriteError extends Error {
         suggestions.push('Consider reducing the number of icons being processed');
         break;
 
+      case ErrorCode.FIGMA_EXPORT_FAILED:
+        suggestions.push('Check if this is an external library component (from another Figma file)');
+        suggestions.push('Ensure all INSTANCE nodes reference components within the same file');
+        suggestions.push('Consider using COMPONENT nodes instead of INSTANCE for icons');
+        break;
+
       case ErrorCode.DUPLICATE_ICON_ID:
         suggestions.push('Use unique icon names in your Figma design system');
         suggestions.push('Or adjust the naming.idFormat to create unique IDs');
@@ -150,7 +321,7 @@ export class SpriteError extends Error {
 export function createConfigError(
   code: ErrorCode.CONFIG_NOT_FOUND | ErrorCode.CONFIG_INVALID | ErrorCode.CONFIG_MISSING_REQUIRED | ErrorCode.CONFIG_PARSE_FAILED,
   message: string,
-  context?: Record<string, unknown>,
+  context?: ErrorContext,
 ): SpriteError {
   return new SpriteError(code, message, context, false);
 }
@@ -167,7 +338,7 @@ export function createFigmaError(
     | ErrorCode.FIGMA_EXPORT_FAILED
     | ErrorCode.FIGMA_NETWORK_ERROR,
   message: string,
-  context?: Record<string, unknown>,
+  context?: ErrorContext,
 ): SpriteError {
   const recoverable = code === ErrorCode.FIGMA_RATE_LIMITED || code === ErrorCode.FIGMA_NETWORK_ERROR;
   return new SpriteError(code, message, context, recoverable);
@@ -179,7 +350,7 @@ export function createFigmaError(
 export function createValidationError(
   code: ErrorCode.DUPLICATE_ICON_ID | ErrorCode.INVALID_ICON_ID | ErrorCode.EMPTY_ICON_SET | ErrorCode.INVALID_NAMING_FORMAT,
   message: string,
-  context?: Record<string, unknown>,
+  context?: ErrorContext,
 ): SpriteError {
   return new SpriteError(code, message, context, false);
 }
@@ -194,7 +365,7 @@ export function createProcessingError(
     | ErrorCode.PACKING_FAILED
     | ErrorCode.SPRITE_GENERATION_FAILED,
   message: string,
-  context?: Record<string, unknown>,
+  context?: ErrorContext,
 ): SpriteError {
   return new SpriteError(code, message, context, false);
 }
@@ -205,7 +376,7 @@ export function createProcessingError(
 export function createOutputError(
   code: ErrorCode.WRITE_FAILED | ErrorCode.TEMPLATE_ERROR | ErrorCode.PERMISSION_DENIED | ErrorCode.OUTPUT_DIR_INVALID,
   message: string,
-  context?: Record<string, unknown>,
+  context?: ErrorContext,
 ): SpriteError {
   return new SpriteError(code, message, context, false);
 }

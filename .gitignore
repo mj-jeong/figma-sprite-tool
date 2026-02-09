@@ -38,3 +38,9 @@ yarn-error.log*
 
 # OS
 Thumbs.db
+
+# Claude Code
+.claude/
+
+# DOCS
+docs/

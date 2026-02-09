@@ -4,12 +4,13 @@
  */
 
 import { loadConfig } from '../../engine/config/index.js';
-import { createFigmaClient, parseIconNodes, exportImages } from '../../engine/figma/index.js';
+import { createFigmaClient, parseIconNodes, createIconMetadata, exportImages } from '../../engine/figma/index.js';
 import {
   packIconsWithPositions,
-  generatePngSprites,
+  calculateSpriteDimensions,
+  generatePngSpriteSheet,
   generateSvgSprite,
-  batchCreateSvgIconData,
+  generateSvgSpritePreview,
 } from '../../engine/sprite/index.js';
 import { writeOutput } from '../../engine/output/index.js';
 import { createLogger, createProgressTracker, handleError, formatSize, formatDuration, formatPercentage } from '../output/index.js';
@@ -80,7 +81,7 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
 
     // Phase 2: Fetch from Figma API
     progress.start('Fetching from Figma API');
-    const client = createFigmaClient({ personalAccessToken: token });
+    const client = createFigmaClient(token);
 
     if (options.verbose) {
       logger.debug(`Requesting file: ${config.figma.fileKey}`);
@@ -105,31 +106,36 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
 
     // Phase 3: Export images
     progress.start('Exporting images from Figma');
-    const iconData = await exportImages(client, icons, config);
+    const iconMetadata = createIconMetadata(icons, config);
+    const exportResults = await exportImages(client, config.figma.fileKey, icons, iconMetadata, config);
+
+    // Extract PNG and SVG data from export results
+    const iconData = exportResults.png?.items || [];
+    const svgIconData = exportResults.svg?.items || [];
 
     if (options.verbose) {
-      const totalSize = iconData.reduce((sum, icon) => {
-        return sum + (icon.pngBuffer?.length ?? 0) + (icon.svgContent?.length ?? 0);
-      }, 0);
-      logger.debug(`Total exported size: ${formatSize(totalSize)}`);
+      const pngSize = iconData.reduce((sum, icon) => sum + icon.buffer.length, 0);
+      const svgSize = svgIconData.reduce((sum, icon) => sum + icon.content.length, 0);
+      logger.debug(`Total exported size: ${formatSize(pngSize + svgSize)}`);
     }
 
     progress.succeed(`Exported ${iconData.length} icons`);
 
     // Phase 4: Generate PNG sprites
     progress.start('Generating PNG sprites');
-    const packed = packIconsWithPositions(iconData, config.formats.png.padding ?? 2);
+    const padding = config.formats.png.padding ?? 2;
+    const packedIcons = packIconsWithPositions(iconData, padding);
+    const { width, height } = calculateSpriteDimensions(iconData, padding);
 
-    const pngSprites = await generatePngSprites(iconData, packed, {
-      scale: config.formats.png.scale ?? 2,
-      padding: config.formats.png.padding ?? 2,
-      background: config.formats.png.background,
-    });
+    const inputScale = config.formats.png.scale ?? 1;
+    const standardSprite = await generatePngSpriteSheet(packedIcons, width, height, 1, inputScale);
+    const retinaSprite = config.formats.png.scale === 2
+      ? await generatePngSpriteSheet(packedIcons, width, height, 2, inputScale)
+      : undefined;
 
-    const { width, height } = packed.dimensions;
     const totalPixels = width * height;
-    const usedPixels = packed.packedIcons.reduce((sum, icon) => {
-      return sum + icon.iconData.width * icon.iconData.height;
+    const usedPixels = packedIcons.reduce((sum, icon) => {
+      return sum + icon.width * icon.height;
     }, 0);
     const efficiency = (usedPixels / totalPixels) * 100;
 
@@ -144,13 +150,12 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
 
     // Phase 5: Generate SVG sprite
     progress.start('Generating SVG sprite');
-    const svgIconData = batchCreateSvgIconData(iconData);
     const svgSprite = await generateSvgSprite(svgIconData, {
-      optimize: config.formats.svg.optimize ?? true,
+      optimize: config.formats.svg.svgo ?? true,
     });
 
     if (options.verbose) {
-      logger.debug(`SVG sprite size: ${formatSize(svgSprite.length)}`);
+      logger.debug(`SVG sprite size: ${formatSize(svgSprite.content.length)}`);
     }
 
     progress.succeed('SVG sprite generated');
@@ -161,21 +166,29 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
       console.log();
       console.log(pc.bold('Output preview:'));
 
-      const outputDir = config.output.directory;
+      const outputDir = config.output.dir;
+      const outputName = config.output.name;
       console.log(
-        pc.dim(`  ${outputDir}/sprite.png`),
-        pc.green(`(${formatSize(pngSprites.sprite1x.length)})`),
+        pc.dim(`  ${outputDir}/${outputName}.png`),
+        pc.green(`(${formatSize(standardSprite.buffer.length)})`),
       );
+      if (retinaSprite) {
+        console.log(
+          pc.dim(`  ${outputDir}/${outputName}@2x.png`),
+          pc.green(`(${formatSize(retinaSprite.buffer.length)})`),
+        );
+      }
       console.log(
-        pc.dim(`  ${outputDir}/sprite@2x.png`),
-        pc.green(`(${formatSize(pngSprites.sprite2x.length)})`),
+        pc.dim(`  ${outputDir}/${outputName}.svg`),
+        pc.green(`(${formatSize(svgSprite.content.length)})`),
       );
+      const svgPreview = generateSvgSpritePreview(svgSprite);
       console.log(
-        pc.dim(`  ${outputDir}/sprite.svg`),
-        pc.green(`(${formatSize(svgSprite.length)})`),
+        pc.dim(`  ${outputDir}/${outputName}.preview.svg`),
+        pc.green(`(${formatSize(svgPreview.length)})`),
       );
-      console.log(pc.dim(`  ${outputDir}/sprite.scss`), pc.green('(~3-5 KB)'));
-      console.log(pc.dim(`  ${outputDir}/sprite.json`), pc.green('(~5-10 KB)'));
+      console.log(pc.dim(`  ${outputDir}/${outputName}.scss`), pc.green('(~3-5 KB)'));
+      console.log(pc.dim(`  ${outputDir}/${outputName}.json`), pc.green('(~5-10 KB)'));
 
       console.log();
       const duration = Date.now() - startTime;
@@ -186,20 +199,38 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
     // Phase 6: Write output files
     progress.start('Writing output files');
     const result = await writeOutput({
-      config,
-      pngSprites,
+      outputDir: config.output.dir,
+      outputName: config.output.name,
+      pngSprite: {
+        buffer: standardSprite.buffer,
+        sheet: standardSprite,
+      },
+      pngSprite2x: retinaSprite
+        ? {
+            buffer: retinaSprite.buffer,
+            sheet: retinaSprite,
+          }
+        : undefined,
       svgSprite,
-      icons: packed.packedIcons.map((p) => p.iconData),
+      fileKey: config.figma.fileKey,
+      page: config.figma.page,
+      pngConfig: {
+        scale: inputScale,
+        padding,
+      },
+      svgConfig: {
+        svgo: config.formats.svg.svgo,
+      },
     });
 
     if (options.verbose) {
-      logger.debug(`Files written to: ${config.output.directory}`);
+      logger.debug(`Files written to: ${config.output.dir}`);
     }
 
     // Display file sizes
     console.log();
-    for (const [filename, size] of Object.entries(result.sizes)) {
-      logger.success(`${filename} ${pc.green(`(${formatSize(size)}`)}`);
+    for (const [filename, size] of Object.entries(result.stats.fileSize)) {
+      logger.success(`${filename} ${pc.green(`(${formatSize(size)})`)}`);
     }
 
     console.log();

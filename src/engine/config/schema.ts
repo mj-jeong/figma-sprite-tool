@@ -60,9 +60,12 @@ const OutputSchema = z.object({
  */
 const NamingSchema = z.object({
   idFormat: z
-    .string()
-    .default('{name}-{size}-{style}{theme?--{theme}}')
-    .describe('Template for generating icon IDs'),
+    .union([
+      z.enum(['simple', 'with-size', 'with-variants']),
+      z.string(),
+    ])
+    .default('simple')
+    .describe('Preset name (simple, with-size, with-variants) or custom template for generating icon IDs'),
   sanitize: z.boolean().default(true).describe('Enable name sanitization (kebab-case, no special chars)'),
 });
 
@@ -142,7 +145,7 @@ export function getDefaultConfig(): Partial<SpriteConfigSchemaType> {
       },
     },
     naming: {
-      idFormat: '{name}-{size}-{style}{theme?--{theme}}',
+      idFormat: 'simple',
       sanitize: true,
     },
   };

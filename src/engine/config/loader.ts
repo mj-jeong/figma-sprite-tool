@@ -7,6 +7,7 @@ import { resolvePath } from '../../utils/path.js';
 import { ErrorCode, createConfigError } from '../../utils/errors.js';
 import { parseConfig, type SpriteConfigSchemaType } from './schema.js';
 import { DEFAULT_CONFIG_NAMES, mergeWithDefaults } from './defaults.js';
+import { resolveIdFormat } from './presets.js';
 import type { SpriteConfig, ConfigPathOptions } from '../types/config.js';
 
 /**
@@ -91,8 +92,13 @@ export async function loadConfigFromPath(configPath: string): Promise<SpriteConf
     );
   }
 
-  // Merge with defaults and return typed config
-  return mergeWithDefaults(validatedConfig);
+  // Merge with defaults
+  const config = mergeWithDefaults(validatedConfig);
+
+  // Resolve preset to template if needed
+  config.naming.idFormat = resolveIdFormat(config.naming.idFormat);
+
+  return config;
 }
 
 /**

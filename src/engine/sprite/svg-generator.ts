@@ -124,6 +124,12 @@ export async function generateSvgSprite(
         });
 
         finalContent = optimized.data;
+
+        // If optimization removed all symbols, fall back to unoptimized content
+        if (!finalContent.includes('<symbol')) {
+          console.warn('SVGO removed all symbols; using unoptimized SVG sprite');
+          finalContent = spriteContent;
+        }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
 
@@ -157,6 +163,56 @@ export async function generateSvgSprite(
       }
     );
   }
+}
+
+/**
+ * Generate an SVG preview document for a symbol sprite
+ *
+ * This creates a grid of <use> elements so the sprite can be previewed
+ * in standard SVG viewers that do not render <symbol> directly.
+ */
+export function generateSvgSpritePreview(
+  sprite: SvgSpriteSheet,
+  options: { padding?: number; columns?: number } = {}
+): string {
+  const icons = sprite.icons;
+  if (icons.length === 0) {
+    return '<svg xmlns="http://www.w3.org/2000/svg"></svg>';
+  }
+
+  const padding = options.padding ?? 8;
+  const columns = options.columns ?? Math.ceil(Math.sqrt(icons.length));
+
+  const maxWidth = Math.max(...icons.map((icon) => icon.width));
+  const maxHeight = Math.max(...icons.map((icon) => icon.height));
+  const cellWidth = maxWidth + padding * 2;
+  const cellHeight = maxHeight + padding * 2;
+
+  const rows = Math.ceil(icons.length / columns);
+  const width = columns * cellWidth;
+  const height = rows * cellHeight;
+
+  const symbols = extractSvgInnerContent(sprite.content);
+
+  const uses = icons.map((icon, index) => {
+    const col = index % columns;
+    const row = Math.floor(index / columns);
+    const x = col * cellWidth + padding;
+    const y = row * cellHeight + padding;
+    const id = icon.id;
+    const width = icon.width;
+    const height = icon.height;
+    return `  <use href="#${escapeXml(id)}" x="${x}" y="${y}" width="${width}" height="${height}" />`;
+  });
+
+  return [
+    `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`,
+    '  <defs>',
+    symbols,
+    '  </defs>',
+    ...uses,
+    '</svg>',
+  ].join('\n');
 }
 
 /**

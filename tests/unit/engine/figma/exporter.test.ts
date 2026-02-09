@@ -27,6 +27,7 @@ describe('Figma exporter', () => {
     mockIconNodes = [
       {
         nodeId: '10:1',
+        exportId: '10:1', // COMPONENT nodes use nodeId as exportId
         name: 'ic/home-24-line',
         type: 'COMPONENT',
         bounds: { x: 0, y: 0, width: 24, height: 24 },
@@ -34,6 +35,7 @@ describe('Figma exporter', () => {
       },
       {
         nodeId: '10:2',
+        exportId: '10:2', // COMPONENT nodes use nodeId as exportId
         name: 'ic/search-24-line',
         type: 'COMPONENT',
         bounds: { x: 30, y: 0, width: 24, height: 24 },
@@ -168,6 +170,7 @@ describe('Figma exporter', () => {
       // Create large icon set
       const largeIconSet: ParsedIconNode[] = Array.from({ length: 150 }, (_, i) => ({
         nodeId: `10:${i}`,
+        exportId: `10:${i}`, // COMPONENT nodes use nodeId as exportId
         name: `ic/icon-${i}-24-line`,
         type: 'COMPONENT' as const,
         bounds: { x: 0, y: 0, width: 24, height: 24 },

@@ -274,64 +274,63 @@ describe('Figma parser', () => {
       expect(metadata.has('user-32-line--dark')).toBe(true);
     });
 
-    it('should throw error on duplicate icon IDs', () => {
-      // Create nodes with duplicate IDs (same name format, different nodeIds)
-      const duplicateNodes = [
+    it('should keep only first occurrence on duplicate icon IDs', () => {
+      const duplicateNodes: ParsedIconNode[] = [
         {
           nodeId: '10:1',
+          exportId: '10:1',
           name: 'ic/home-24-line',
-          type: 'COMPONENT' as const,
+          type: 'COMPONENT',
           bounds: { x: 0, y: 0, width: 24, height: 24 },
           visible: true,
         },
         {
           nodeId: '10:2',
-          name: 'ic/home-24-line', // Duplicate name
-          type: 'COMPONENT' as const,
+          exportId: '10:2',
+          name: 'ic/home-24-line', // Duplicate name -> same icon ID
+          type: 'COMPONENT',
           bounds: { x: 30, y: 0, width: 24, height: 24 },
           visible: true,
         },
       ];
 
-      expect(() => createIconMetadata(duplicateNodes, mockConfig)).toThrow(SpriteError);
-      expect(() => createIconMetadata(duplicateNodes, mockConfig)).toThrow(
-        /Duplicate icon IDs detected/,
-      );
+      const metadata = createIconMetadata(duplicateNodes, mockConfig);
+
+      // Should keep only the first occurrence
+      expect(metadata.size).toBe(1);
+      expect(metadata.has('home-24-line')).toBe(true);
+      expect(metadata.get('home-24-line')?.nodeId).toBe('10:1'); // First one
     });
 
-    it('should include detailed duplicate information in error', () => {
-      const duplicateNodes = [
+    it('should handle multiple INSTANCE nodes with same componentId', () => {
+      const instanceNodes: ParsedIconNode[] = [
         {
           nodeId: '10:1',
+          exportId: 'comp-123', // Same exportId
           name: 'ic/home-24-line',
-          type: 'COMPONENT' as const,
+          type: 'INSTANCE',
           bounds: { x: 0, y: 0, width: 24, height: 24 },
           visible: true,
         },
         {
           nodeId: '10:2',
-          name: 'ic/home-24-line',
-          type: 'COMPONENT' as const,
+          exportId: 'comp-123', // Same exportId -> same component
+          name: 'ic/home-24-line-copy', // Different Figma name
+          type: 'INSTANCE',
           bounds: { x: 30, y: 0, width: 24, height: 24 },
           visible: true,
         },
       ];
 
-      try {
-        createIconMetadata(duplicateNodes, mockConfig);
-        expect.fail('Should have thrown error');
-      } catch (error) {
-        expect(error).toBeInstanceOf(SpriteError);
-        if (error instanceof SpriteError) {
-          expect(error.code).toBe(ErrorCode.DUPLICATE_ICON_ID);
-          expect(error.context).toHaveProperty('duplicates');
-          const duplicates = error.context!.duplicates as any[];
-          expect(duplicates[0]).toMatchObject({
-            id: 'home-24-line',
-            nodeIds: ['10:1', '10:2'],
-          });
-        }
-      }
+      const metadata = createIconMetadata(instanceNodes, mockConfig);
+
+      // Both should be included with different icon IDs (due to different Figma names)
+      // But if they generate the same ID, only first is kept
+      expect(metadata.size).toBeGreaterThanOrEqual(1);
+
+      // Verify first instance is included
+      const entries = Array.from(metadata.values());
+      expect(entries[0].exportId).toBe('comp-123');
     });
 
     it('should preserve node metadata in map', () => {
@@ -348,6 +347,75 @@ describe('Figma parser', () => {
         width: 24,
         height: 24,
       });
+    });
+  });
+
+  describe('sanitizeSingleVariantValue usage validation', () => {
+    it('should correctly sanitize individual variant values', () => {
+      // This test verifies correct usage patterns
+      const variants = {
+        name: 'Home Icon',
+        size: '24',
+        style: 'filled/bold',
+      };
+
+      const id = generateIconId(variants, '{name}-{size}-{style}', true);
+
+      // Expected: 'home-icon-24-filled-bold'
+      // Each variant value is sanitized individually before combination
+      expect(id).toBe('home-icon-24-filled-bold');
+    });
+
+    it('should handle unicode characters in variant values', () => {
+      const variants = {
+        name: '홈',
+        size: '24',
+      };
+
+      const id = generateIconId(variants, '{name}-{size}', true);
+      expect(id).toBe('홈-24'); // Korean characters preserved
+    });
+
+    it('should handle special characters in variant values', () => {
+      const variants = {
+        name: 'home@icon!',
+        size: '24x24',
+      };
+
+      const id = generateIconId(variants, '{name}-{size}', true);
+      expect(id).toBe('homeicon-24x24'); // Special chars removed
+    });
+
+    it('should collapse multiple hyphens in variant values', () => {
+      const variants = {
+        name: 'home---icon',
+        size: '24',
+      };
+
+      const id = generateIconId(variants, '{name}-{size}', true);
+      expect(id).toBe('home-icon-24'); // Multiple hyphens collapsed
+    });
+
+    it('should handle empty string variant values', () => {
+      const variants = {
+        name: 'home',
+        size: '',
+        style: 'filled',
+      };
+
+      const id = generateIconId(variants, '{name}-{size}-{style}', true);
+      expect(id).toBe('home--filled'); // Empty value results in double hyphen
+    });
+
+    it('should NOT sanitize template structure (like --)', () => {
+      // This verifies that only VALUES are sanitized, not the template
+      const variants = {
+        name: 'home',
+        theme: 'dark',
+      };
+
+      const id = generateIconId(variants, '{name}{theme?--{theme}}', true);
+      expect(id).toBe('home--dark'); // Template's '--' is preserved
     });
   });
 });

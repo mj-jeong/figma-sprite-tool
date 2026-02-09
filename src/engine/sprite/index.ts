@@ -17,6 +17,7 @@ export {
 // SVG generation
 export {
   generateSvgSprite,
+  generateSvgSpritePreview,
   createSvgIconData,
   batchCreateSvgIconData,
   validateSvgIcons,

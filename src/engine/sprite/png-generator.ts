@@ -14,6 +14,8 @@ import { createHash } from 'node:crypto';
 export interface PngGenerationOptions {
   /** Scale factor (1 for standard, 2 for retina) */
   scale: number;
+  /** Scale factor of input icon buffers (1 or 2) */
+  inputScale: number;
   /** Background color (transparent by default) */
   backgroundColor?: { r: number; g: number; b: number; alpha: number };
   /** PNG compression level (0-9, default: 9) */
@@ -25,6 +27,7 @@ export interface PngGenerationOptions {
  */
 const DEFAULT_PNG_OPTIONS: PngGenerationOptions = {
   scale: 1,
+  inputScale: 1,
   backgroundColor: { r: 0, g: 0, b: 0, alpha: 0 },
   compressionLevel: 9,
 };
@@ -98,7 +101,7 @@ export async function generatePngSprite(
         // Scale icon buffer if needed
         let processedBuffer = icon.buffer;
 
-        if (opts.scale !== 1) {
+        if (opts.scale !== opts.inputScale) {
           const scaledWidth = Math.round(icon.width * opts.scale);
           const scaledHeight = Math.round(icon.height * opts.scale);
 
@@ -172,7 +175,8 @@ export async function generatePngSprites(
   packedIcons: PackedIcon[],
   spriteWidth: number,
   spriteHeight: number,
-  padding: number
+  padding: number,
+  inputScale: number = 1
 ): Promise<{
   standard: SpriteSheet;
   retina: SpriteSheet;
@@ -180,11 +184,13 @@ export async function generatePngSprites(
   // Generate 1x sprite
   const standardResult = await generatePngSprite(packedIcons, spriteWidth, spriteHeight, {
     scale: 1,
+    inputScale,
   });
 
   // Generate 2x sprite
   const retinaResult = await generatePngSprite(packedIcons, spriteWidth, spriteHeight, {
     scale: 2,
+    inputScale,
   });
 
   // Create sprite sheet metadata
@@ -239,13 +245,14 @@ export async function generatePngSpriteSheet(
   packedIcons: PackedIcon[],
   spriteWidth: number,
   spriteHeight: number,
-  scale: number = 1
+  scale: number = 1,
+  inputScale: number = 1
 ): Promise<SpriteSheet & { buffer: Buffer }> {
   const { buffer, hash } = await generatePngSprite(
     packedIcons,
     spriteWidth,
     spriteHeight,
-    { scale }
+    { scale, inputScale }
   );
 
   const scaledWidth = Math.round(spriteWidth * scale);

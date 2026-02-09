@@ -36,9 +36,9 @@ export const DEFAULT_PNG_SCALE = 2;
 export const DEFAULT_PADDING = 2;
 
 /**
- * Default icon ID format template
+ * Default icon ID format (preset name)
  */
-export const DEFAULT_ID_FORMAT = '{name}-{size}-{style}{theme?--{theme}}';
+export const DEFAULT_ID_FORMAT = 'simple';
 
 /**
  * Get default configuration object

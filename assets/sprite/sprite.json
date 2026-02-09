@@ -1,0 +1,106 @@
+{
+  "meta": {
+    "fileKey": "NAxWIWBLq0dsDvuDSnfpxZ",
+    "page": "FRO_MAI_001_02",
+    "generatedAt": "2026-02-09T14:32:16+09:00",
+    "png": {
+      "scale": 2,
+      "padding": 2
+    },
+    "svg": {
+      "svgo": false
+    }
+  },
+  "icons": {
+    "1": {
+      "nodeId": "60:812",
+      "variants": {},
+      "png": {
+        "x": 2,
+        "y": 2,
+        "w": 48,
+        "h": 48
+      },
+      "svg": {
+        "symbolId": "1",
+        "viewBox": "0 0 48 48"
+      },
+      "hash": {
+        "png": "24d68287",
+        "svg": "cda854b0"
+      }
+    },
+    "2": {
+      "nodeId": "60:802",
+      "variants": {},
+      "png": {
+        "x": 54,
+        "y": 2,
+        "w": 48,
+        "h": 48
+      },
+      "svg": {
+        "symbolId": "2",
+        "viewBox": "0 0 48 48"
+      },
+      "hash": {
+        "png": "24d68287",
+        "svg": "cda854b0"
+      }
+    },
+    "3": {
+      "nodeId": "60:793",
+      "variants": {},
+      "png": {
+        "x": 2,
+        "y": 54,
+        "w": 48,
+        "h": 48
+      },
+      "svg": {
+        "symbolId": "3",
+        "viewBox": "0 0 48 48"
+      },
+      "hash": {
+        "png": "24d68287",
+        "svg": "cda854b0"
+      }
+    },
+    "4": {
+      "nodeId": "60:787",
+      "variants": {},
+      "png": {
+        "x": 54,
+        "y": 54,
+        "w": 48,
+        "h": 48
+      },
+      "svg": {
+        "symbolId": "4",
+        "viewBox": "0 0 48 48"
+      },
+      "hash": {
+        "png": "24d68287",
+        "svg": "cda854b0"
+      }
+    },
+    "5": {
+      "nodeId": "60:778",
+      "variants": {},
+      "png": {
+        "x": 2,
+        "y": 106,
+        "w": 48,
+        "h": 48
+      },
+      "svg": {
+        "symbolId": "5",
+        "viewBox": "0 0 48 48"
+      },
+      "hash": {
+        "png": "24d68287",
+        "svg": "cda854b0"
+      }
+    }
+  }
+}

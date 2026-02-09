@@ -5,3 +5,4 @@
 
 export { generateCommand } from './generate.js';
 export type { GenerateOptions } from './generate.js';
+export { initCommand } from './init.js';

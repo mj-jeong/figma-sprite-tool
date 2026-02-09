@@ -47,22 +47,36 @@ pnpm lint
 pnpm format
 ```
 
-## Usage
+## Getting Started
 
-```bash
-# Generate sprite from config
-figma-sprite build
+### Quick Start (Recommended)
 
-# With custom config file
-figma-sprite build -c custom.config.json
+1. **Run interactive setup**:
+   ```bash
+   figma-sprite init
+   ```
 
-# Set Figma token via environment variable
-FIGMA_TOKEN=your_token_here figma-sprite build
-```
+2. **Follow the prompts** to configure your project:
+   - Enter your Figma file URL
+   - Specify the page containing icons
+   - Choose icon name prefix for filtering
+   - Select icon ID format
+   - Set output directory
 
-## Configuration
+3. **Set your Figma token**:
+   ```bash
+   export FIGMA_TOKEN="your-figma-token"
+   ```
+   Get your token from: https://www.figma.com/developers/api#access-tokens
 
-Create a `figma.sprite.config.json` file in your project root:
+4. **Generate sprites**:
+   ```bash
+   figma-sprite generate
+   ```
+
+### Manual Configuration (Advanced)
+
+If you prefer to create the configuration file manually, create a `figma.sprite.config.json` file in your project root:
 
 ```json
 {
@@ -94,6 +108,35 @@ Create a `figma.sprite.config.json` file in your project root:
     "sanitize": true
   }
 }
+```
+
+## Usage
+
+### Available Commands
+
+```bash
+# Create configuration interactively
+figma-sprite init
+
+# Generate sprite from config
+figma-sprite generate
+# or
+figma-sprite build  # alias for generate
+
+# With custom config file
+figma-sprite generate -c custom.config.json
+
+# With output directory override
+figma-sprite generate -o ./custom-output
+
+# Verbose mode for debugging
+figma-sprite generate --verbose
+
+# Dry run (preview without writing files)
+figma-sprite generate --dry-run
+
+# Set Figma token via environment variable
+FIGMA_TOKEN=your_token_here figma-sprite generate
 ```
 
 ## Output Files

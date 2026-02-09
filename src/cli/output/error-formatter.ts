@@ -4,22 +4,93 @@
  */
 
 import pc from 'picocolors';
-import { SpriteError } from '../../utils/errors.js';
+import {
+  SpriteError,
+  type ErrorContext,
+  type OrphanedInstanceContext,
+  type OrphanedInstanceErrorContext,
+  type DuplicateInfo,
+  type DuplicateIconsContext,
+} from '../../utils/errors.js';
 
 /**
  * Format error context for display
  */
-function formatContext(context: Record<string, unknown>): string {
+function formatContext(context: ErrorContext): string {
+  // Empty context check
+  if (!context || Object.keys(context).length === 0) {
+    return '';
+  }
+
+  // Type-specific formatting for OrphanedInstanceContext (direct)
+  if ('instanceName' in context && 'instanceId' in context && 'missingComponentId' in context) {
+    const orphaned = context as OrphanedInstanceContext;
+    return [
+      `  Instance: ${orphaned.instanceName} (${orphaned.instanceId})`,
+      `  Missing Component ID: ${orphaned.missingComponentId}`,
+      `  ${pc.cyan('ℹ')} ${orphaned.suggestion}`,
+    ].join('\n');
+  }
+
+  // Type-specific formatting for OrphanedInstanceErrorContext (wrapped)
+  if ('orphanedInstance' in context) {
+    const wrapped = context as OrphanedInstanceErrorContext;
+    const orphaned = wrapped.orphanedInstance;
+    return [
+      `  Instance: ${orphaned.instanceName} (${orphaned.instanceId})`,
+      `  Missing Component ID: ${orphaned.missingComponentId}`,
+      `  ${pc.cyan('ℹ')} ${orphaned.suggestion}`,
+    ].join('\n');
+  }
+
+  // Type-specific formatting for DuplicateInfo (single item)
+  if ('id' in context && 'names' in context && Array.isArray((context as DuplicateInfo).names)) {
+    const d = context as DuplicateInfo;
+    return [
+      `  ${pc.yellow('•')} ${pc.bold(d.id)}`,
+      `  Figma names: ${d.names.join(', ')}`,
+      `  Node IDs: ${d.nodeIds.join(', ')}`,
+    ].join('\n');
+  }
+
+  // Type-specific formatting for DuplicateIconsContext (array of duplicates)
+  if ('duplicates' in context && Array.isArray((context as DuplicateIconsContext).duplicates)) {
+    const duplicatesContext = context as DuplicateIconsContext;
+    return duplicatesContext.duplicates
+      .map((d) => {
+        const lines = [
+          `  ${pc.yellow('•')} ${pc.bold(d.id)}`,
+          `    Figma names: ${d.names.join(', ')}`,
+          `    Node IDs: ${d.nodeIds.join(', ')}`,
+        ];
+        return lines.join('\n');
+      })
+      .join('\n');
+  }
+
+  // Handle generic context (fallback)
   return Object.entries(context)
     .map(([key, value]) => {
       const formattedKey = key.replace(/([A-Z])/g, ' $1').toLowerCase();
       let formattedValue: string;
 
+      // Regular array
       if (Array.isArray(value)) {
-        formattedValue = value.map((v) => `  • ${v}`).join('\n');
-      } else if (typeof value === 'object' && value !== null) {
+        formattedValue = value
+          .map((v) => {
+            if (typeof v === 'object' && v !== null) {
+              return `  • ${JSON.stringify(v)}`;
+            }
+            return `  • ${v}`;
+          })
+          .join('\n');
+      }
+      // Object
+      else if (typeof value === 'object' && value !== null) {
         formattedValue = JSON.stringify(value, null, 2);
-      } else {
+      }
+      // Primitive
+      else {
         formattedValue = String(value);
       }
 
@@ -40,7 +111,7 @@ function getSuggestionsFromError(error: SpriteError): string[] {
   const userMessage = error.toUserMessage();
   const suggestionsMatch = userMessage.match(/Suggested actions:\n((?:  • .+\n?)+)/);
 
-  if (suggestionsMatch) {
+  if (suggestionsMatch && suggestionsMatch[1]) {
     return suggestionsMatch[1]
       .split('\n')
       .filter((line) => line.trim())

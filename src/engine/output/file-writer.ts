@@ -6,6 +6,7 @@
 import { writeFile, ensureDir } from '../../utils/fs.js';
 import { resolvePath, joinPath, normalizePath } from '../../utils/path.js';
 import type { SpriteSheet, SvgSpriteSheet } from '../types/sprite.js';
+import { generateSvgSpritePreview } from '../sprite/svg-generator.js';
 import { generateScss, type ScssGenerationOptions } from './scss-generator.js';
 import { generateSpriteJson, type JsonGenerationOptions } from './json-generator.js';
 
@@ -19,6 +20,8 @@ export interface OutputFilePaths {
   png2x: string;
   /** SVG sprite file path */
   svg: string;
+  /** SVG sprite preview file path */
+  svgPreview: string;
   /** SCSS mixin file path */
   scss: string;
   /** JSON metadata file path */
@@ -45,6 +48,7 @@ export interface OutputResult {
       png: number;
       png2x: number;
       svg: number;
+      svgPreview: number;
       scss: number;
       json: number;
     };
@@ -102,6 +106,7 @@ export function buildOutputPaths(outputDir: string, outputName: string): OutputF
     png: normalizePath(joinPath(dir, `${outputName}.png`)),
     png2x: normalizePath(joinPath(dir, `${outputName}@2x.png`)),
     svg: normalizePath(joinPath(dir, `${outputName}.svg`)),
+    svgPreview: normalizePath(joinPath(dir, `${outputName}.preview.svg`)),
     scss: normalizePath(joinPath(dir, `${outputName}.scss`)),
     json: normalizePath(joinPath(dir, `${outputName}.json`)),
   };
@@ -146,6 +151,19 @@ async function writePngFiles(
 async function writeSvgFile(path: string, svgSprite: SvgSpriteSheet): Promise<number> {
   await writeFile(path, svgSprite.content);
   return Buffer.byteLength(svgSprite.content, 'utf-8');
+}
+
+/**
+ * Write SVG preview file
+ *
+ * @param path - SVG preview file path
+ * @param svgSprite - SVG sprite data
+ * @returns File size in bytes
+ */
+async function writeSvgPreviewFile(path: string, svgSprite: SvgSpriteSheet): Promise<number> {
+  const preview = generateSvgSpritePreview(svgSprite);
+  await writeFile(path, preview);
+  return Buffer.byteLength(preview, 'utf-8');
 }
 
 /**
@@ -221,6 +239,7 @@ export async function writeOutput(options: WriteOutputOptions): Promise<OutputRe
 
   // Write SVG file
   const svgSize = await writeSvgFile(paths.svg, options.svgSprite);
+  const svgPreviewSize = await writeSvgPreviewFile(paths.svgPreview, options.svgSprite);
 
   // Write SCSS file
   const scssSize = await writeScssFile(paths.scss, {
@@ -264,6 +283,7 @@ export async function writeOutput(options: WriteOutputOptions): Promise<OutputRe
         png: pngSizes.png,
         png2x: pngSizes.png2x,
         svg: svgSize,
+        svgPreview: svgPreviewSize,
         scss: scssSize,
         json: jsonSize,
       },

@@ -34,6 +34,8 @@ export interface FigmaNode {
   type: FigmaNodeType;
   visible?: boolean;
   children?: FigmaNode[];
+  /** Component ID (for INSTANCE nodes) */
+  componentId?: string;
 }
 
 /**
@@ -61,10 +63,18 @@ export type FigmaNodeType =
  * Figma frame node (used for icons)
  */
 export interface FigmaFrameNode extends FigmaNode {
-  type: 'FRAME' | 'COMPONENT';
+  type: 'FRAME' | 'COMPONENT' | 'INSTANCE';
   absoluteBoundingBox: FigmaBoundingBox;
   backgroundColor?: FigmaColor;
   children: FigmaNode[];
+}
+
+/**
+ * Figma INSTANCE node (instance of a component)
+ */
+export interface FigmaInstanceNode extends FigmaFrameNode {
+  type: 'INSTANCE';
+  componentId: string;
 }
 
 /**
@@ -201,6 +211,8 @@ export interface IconFilterCriteria {
 export interface ParsedIconNode {
   /** Node ID */
   nodeId: string;
+  /** ID to use for export (componentId for INSTANCE, nodeId for others) */
+  exportId: string;
   /** Node name */
   name: string;
   /** Node type */

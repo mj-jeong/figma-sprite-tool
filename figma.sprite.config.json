@@ -1,14 +1,15 @@
 {
   "figma": {
-    "fileKey": "YOUR_FIGMA_FILE_KEY",
-    "page": "Design System / Icons",
+    "fileKey": "NAxWIWBLq0dsDvuDSnfpxZ",
+    "personalAccessToken": "figd_wXCQAuV2AE3M6aIdYRHiB_C7_o6kIJvw0GILBKA2",
+    "page": "FRO_MAI_001_02",
     "scope": {
       "type": "prefix",
       "value": "ic/"
     }
   },
   "output": {
-    "dir": "output",
+    "dir": "assets/sprite",
     "name": "sprite"
   },
   "formats": {
@@ -19,11 +20,11 @@
     },
     "svg": {
       "enabled": true,
-      "svgo": true
+      "svgo": false
     }
   },
   "naming": {
-    "idFormat": "{name}-{size}-{style}{theme?--{theme}}",
+    "idFormat": "simple",
     "sanitize": true
   }
 }

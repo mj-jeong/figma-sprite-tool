@@ -1,0 +1,13 @@
+{
+  "figma": {
+    "fileKey": "PresetTest456",
+    "page": "Icons",
+    "scope": {
+      "type": "prefix",
+      "value": "icon-"
+    }
+  },
+  "naming": {
+    "idFormat": "with-size"
+  }
+}

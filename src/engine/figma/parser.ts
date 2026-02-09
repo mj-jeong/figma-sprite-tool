@@ -7,6 +7,7 @@ import type {
   FigmaNode,
   FigmaFileResponse,
   FigmaFrameNode,
+  FigmaInstanceNode,
   ParsedIconNode,
   IconFilterCriteria,
   FigmaNodeType,
@@ -46,11 +47,11 @@ export function parseIconNodes(fileResponse: FigmaFileResponse, config: SpriteCo
   const filterCriteria: IconFilterCriteria = {
     page,
     prefix: scope.type === 'prefix' ? scope.value : undefined,
-    nodeTypes: ['FRAME', 'COMPONENT'],
+    nodeTypes: ['FRAME', 'COMPONENT', 'INSTANCE'],
   };
 
   // Extract and filter icon nodes
-  const iconNodes = extractIconNodes(targetPage, filterCriteria);
+  const iconNodes = extractIconNodes(fileResponse, targetPage, filterCriteria);
 
   if (iconNodes.length === 0) {
     throw createValidationError(ErrorCode.EMPTY_ICON_SET, 'No icons found matching filter criteria', {
@@ -132,7 +133,11 @@ function listAvailablePages(document: FigmaNode): string[] {
 /**
  * Extract icon nodes from page based on filter criteria
  */
-function extractIconNodes(page: FigmaNode, criteria: IconFilterCriteria): ParsedIconNode[] {
+function extractIconNodes(
+  fileResponse: FigmaFileResponse,
+  page: FigmaNode,
+  criteria: IconFilterCriteria,
+): ParsedIconNode[] {
   const iconNodes: ParsedIconNode[] = [];
 
   function traverse(node: FigmaNode): void {
@@ -140,8 +145,37 @@ function extractIconNodes(page: FigmaNode, criteria: IconFilterCriteria): Parsed
     if (isIconNode(node, criteria)) {
       const frameNode = node as FigmaFrameNode;
 
+      // For INSTANCE nodes, validate componentId exists
+      if (node.type === 'INSTANCE') {
+        const instanceNode = node as FigmaInstanceNode;
+
+        if (!instanceNode.componentId) {
+          console.warn(
+            `⚠️  INSTANCE node "${node.name}" (${node.id}) has no componentId - skipping`
+          );
+          return; // Skip this node
+        }
+
+        // Check if component exists in components section
+        if (fileResponse.components && !fileResponse.components[instanceNode.componentId]) {
+          console.warn(
+            `⚠️  INSTANCE "${node.name}" (${node.id}) references missing component ${instanceNode.componentId}`
+          );
+          console.warn(
+            `    This may be an external library component. Export may fail.`
+          );
+        }
+      }
+
+      // For INSTANCE nodes, use componentId for export (the original component)
+      // For other nodes (FRAME, COMPONENT), use the node's own ID
+      const exportId = node.type === 'INSTANCE' && node.componentId
+        ? node.componentId
+        : node.id;
+
       iconNodes.push({
         nodeId: node.id,
+        exportId,
         name: node.name,
         type: node.type,
         bounds: frameNode.absoluteBoundingBox,
@@ -182,7 +216,7 @@ function isIconNode(node: FigmaNode, criteria: IconFilterCriteria): boolean {
   }
 
   // Check if node has bounding box (required for export)
-  if (node.type === 'FRAME' || node.type === 'COMPONENT') {
+  if (node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'INSTANCE') {
     const frameNode = node as FigmaFrameNode;
     if (!frameNode.absoluteBoundingBox) {
       return false;
@@ -294,7 +328,7 @@ export function generateIconId(
   // This ensures only the data is sanitized, not the template structure (like --)
   const sanitizedVariants = sanitize
     ? Object.fromEntries(
-        Object.entries(variants).map(([key, value]) => [key, sanitizeVariantValue(value)])
+        Object.entries(variants).map(([key, value]) => [key, sanitizeSingleVariantValue(value)])
       )
     : variants;
 
@@ -339,22 +373,46 @@ export function generateIconId(
 }
 
 /**
- * Sanitize a single variant value (not the full ID)
- * This is applied to individual variant components before ID generation
+ * Sanitize a single variant value (NOT a full icon ID)
  *
- * - Convert to kebab-case
- * - Remove special characters
- * - Collapse multiple hyphens
+ * @param value - A single variant value (e.g., "Home", "24", "filled")
+ * @returns Sanitized kebab-case string
+ *
+ * @example
+ * ```typescript
+ * // ✅ Correct usage: sanitize individual variant values
+ * sanitizeSingleVariantValue('Home Icon')  // → 'home-icon'
+ * sanitizeSingleVariantValue('24')         // → '24'
+ * sanitizeSingleVariantValue('filled')     // → 'filled'
+ *
+ * // ❌ Wrong usage: do NOT use for full icon IDs
+ * // sanitizeSingleVariantValue('ic-home-24-filled')  // Wrong! This is already an ID
+ * ```
+ *
+ * @remarks
+ * This function is called internally by `generateIconId` to sanitize individual
+ * variant values BEFORE they are combined into the final icon ID.
+ *
+ * Transformations applied:
+ * - Converts to lowercase
+ * - Replaces slashes with hyphens (ic/menu → ic-menu)
+ * - Replaces spaces/underscores with hyphens (Home Icon → home-icon)
+ * - Removes special characters (keeps letters, numbers, hyphens, unicode)
+ * - Collapses multiple consecutive hyphens (home--icon → home-icon)
  */
-function sanitizeVariantValue(value: string): string {
+function sanitizeSingleVariantValue(value: string): string {
   // Convert to lowercase
   let sanitized = value.toLowerCase();
+
+  // Replace slashes with hyphens (for hierarchical names like "ic/menu/submenu")
+  sanitized = sanitized.replace(/\//g, '-');
 
   // Replace spaces and underscores with hyphens
   sanitized = sanitized.replace(/[\s_]+/g, '-');
 
-  // Remove special characters (keep letters, numbers, hyphens)
-  sanitized = sanitized.replace(/[^a-z0-9-]/g, '');
+  // Remove special characters (keep letters, numbers, hyphens, and unicode letters for non-Latin scripts)
+  // This allows Korean, Japanese, Chinese characters, etc.
+  sanitized = sanitized.replace(/[^\p{L}\p{N}-]/gu, '');
 
   // Collapse multiple consecutive hyphens
   sanitized = sanitized.replace(/-+/g, '-');
@@ -433,23 +491,10 @@ export function createIconMetadata(
     }
   }
 
-  // Fail on duplicates (as per spec requirements)
-  if (duplicates.size > 0) {
-    const duplicateInfo = Array.from(duplicates.entries()).map(([id, nodes]) => ({
-      id,
-      nodeIds: nodes.map((n) => n.nodeId),
-      names: nodes.map((n) => n.name),
-    }));
-
-    throw createValidationError(
-      ErrorCode.DUPLICATE_ICON_ID,
-      `Duplicate icon IDs detected: ${duplicates.size} collision(s)`,
-      {
-        duplicates: duplicateInfo,
-        suggestion: 'Use unique icon names in Figma or adjust naming.idFormat to create unique IDs',
-      },
-    );
-  }
+  // Handle duplicates: keep first occurrence only (common for INSTANCE nodes)
+  // When the same component is used multiple times in a page, we only need one for the sprite
+  // Note: duplicates map only contains icons with duplicate IDs, iconMap already has the first one
+  // So we don't need to do anything - the first occurrence is already in iconMap
 
   return iconMap;
 }

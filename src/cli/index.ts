@@ -6,7 +6,7 @@
  */
 
 import { Command } from 'commander';
-import { generateCommand } from './commands/index.js';
+import { generateCommand, initCommand } from './commands/index.js';
 import { handleError } from './output/index.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -45,6 +45,18 @@ program
   .name('figma-sprite')
   .description('Generate sprite sheets from Figma design systems')
   .version(packageJson.version);
+
+// Init command
+program
+  .command('init')
+  .description('Create a configuration file interactively')
+  .action(async () => {
+    try {
+      await initCommand();
+    } catch (error) {
+      handleError(error);
+    }
+  });
 
 // Generate command (with alias 'build')
 program

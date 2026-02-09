@@ -12,6 +12,9 @@ const validConfigPath = join(fixturesDir, 'valid.config.json');
 const invalidConfigPath = join(fixturesDir, 'invalid.config.json');
 const minimalConfigPath = join(fixturesDir, 'minimal.config.json');
 const nonexistentPath = join(fixturesDir, 'nonexistent.json');
+const presetSimpleConfigPath = join(fixturesDir, 'preset.config.json');
+const presetWithSizeConfigPath = join(fixturesDir, 'preset-with-size.config.json');
+const presetWithVariantsConfigPath = join(fixturesDir, 'preset-with-variants.config.json');
 
 describe('loadConfigFromPath', () => {
   it('should load valid config file', async () => {
@@ -134,5 +137,48 @@ describe('Config loading with different formats', () => {
     expect(config.formats.png.scale).toBe(2);
     expect(config.formats.png.padding).toBe(2);
     expect(config.naming.idFormat).toBe('{name}-{size}-{style}{theme?--{theme}}');
+  });
+});
+
+describe('Preset resolution', () => {
+  it('should resolve simple preset to template', async () => {
+    const config = await loadConfigFromPath(presetSimpleConfigPath);
+
+    expect(config.naming.idFormat).toBe('{name}');
+  });
+
+  it('should resolve with-size preset to template', async () => {
+    const config = await loadConfigFromPath(presetWithSizeConfigPath);
+
+    expect(config.naming.idFormat).toBe('{name}-{size}');
+  });
+
+  it('should resolve with-variants preset to template', async () => {
+    const config = await loadConfigFromPath(presetWithVariantsConfigPath);
+
+    expect(config.naming.idFormat).toBe('{name}-{size}-{style}{theme?--{theme}}');
+  });
+
+  it('should preserve custom template strings', async () => {
+    const config = await loadConfigFromPath(validConfigPath);
+
+    // valid.config.json uses legacy template string
+    expect(config.naming.idFormat).toBe('{name}-{size}-{style}{theme?--{theme}}');
+  });
+
+  it('should apply default preset when not specified', async () => {
+    const config = await loadConfigFromPath(minimalConfigPath);
+
+    // minimal.config.json doesn't specify idFormat, should use default 'simple' preset
+    expect(config.naming.idFormat).toBe('{name}');
+  });
+
+  it('should handle preset in merged config', async () => {
+    const config = await loadConfigFromPath(presetSimpleConfigPath);
+
+    // Check that other defaults are still applied
+    expect(config.output.dir).toBe('assets/sprite');
+    expect(config.formats.png.scale).toBe(2);
+    expect(config.naming.idFormat).toBe('{name}');
   });
 });
