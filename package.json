@@ -1,6 +1,6 @@
 {
   "name": "figma-sprite-tool",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "CLI tool to generate PNG/SVG sprite sheets, SCSS mixins, and JSON metadata from Figma design systems",
   "type": "module",
   "main": "./dist/index.js",
