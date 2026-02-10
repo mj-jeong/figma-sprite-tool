@@ -24,6 +24,19 @@ export interface ScssGenerationOptions {
   spriteHeight: number;
   /** Packed icons with positions */
   icons: PackedIcon[];
+  /** SVG preview sprite dimensions and coordinates (optional) */
+  svgPreview?: {
+    spriteImage: string;
+    spriteWidth: number;
+    spriteHeight: number;
+    icons: Array<{
+      id: string;
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+    }>;
+  };
 }
 
 /**
@@ -41,6 +54,18 @@ interface ScssTemplateData {
     w: number;
     h: number;
   }>;
+  svgPreview?: {
+    spriteImage: string;
+    spriteWidth: number;
+    spriteHeight: number;
+    icons: Array<{
+      id: string;
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+    }>;
+  };
 }
 
 // Cache compiled templates
@@ -181,6 +206,7 @@ export async function generateScss(options: ScssGenerationOptions): Promise<stri
       spriteWidth: options.spriteWidth,
       spriteHeight: options.spriteHeight,
       icons,
+      svgPreview: options.svgPreview,
     };
 
     // Render template
@@ -222,6 +248,7 @@ export async function generateMixins(options: ScssGenerationOptions): Promise<st
       spriteWidth: options.spriteWidth,
       spriteHeight: options.spriteHeight,
       icons,
+      svgPreview: options.svgPreview,
     };
 
     return template(data);

@@ -9,6 +9,92 @@ import type { SpriteSheet, SvgSpriteSheet } from '../types/sprite.js';
 import { generateSvgSpritePreview } from '../sprite/svg-generator.js';
 import { generateScss, generateMixins, type ScssGenerationOptions } from './scss-generator.js';
 import { generateSpriteJson, type JsonGenerationOptions } from './json-generator.js';
+import { parseViewBox } from '../sprite/viewbox-extractor.js';
+
+/**
+ * Default padding for SVG preview sprite (matches svg-generator.ts)
+ */
+const DEFAULT_PREVIEW_PADDING = 8;
+
+/**
+ * SVG preview icon coordinate
+ */
+interface SvgPreviewIconCoordinate {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * Calculate SVG preview grid layout coordinates
+ *
+ * Reuses the same grid layout logic as generateSvgSpritePreview():
+ * - Grid layout with uniform cells
+ * - Sequential placement by index
+ * - Column-major ordering
+ *
+ * @param icons - SVG icon data
+ * @param options - Layout options (padding, columns)
+ * @returns Array of icon coordinates in grid layout
+ */
+function calculateSvgPreviewCoordinates(
+  icons: Array<{ id: string; width: number; height: number; viewBox: string }>,
+  options: { padding?: number; columns?: number } = {}
+): SvgPreviewIconCoordinate[] {
+  const padding = Math.max(0, options.padding ?? DEFAULT_PREVIEW_PADDING);
+  const columns = Math.max(1, options.columns ?? Math.ceil(Math.sqrt(icons.length)));
+
+  // Calculate cell size based on maximum icon dimensions
+  const maxWidth = Math.max(...icons.map((icon) => {
+    try {
+      const parsed = parseViewBox(icon.viewBox);
+      return Math.max(1, Math.ceil(parsed.width));
+    } catch {
+      return icon.width;
+    }
+  }));
+
+  const maxHeight = Math.max(...icons.map((icon) => {
+    try {
+      const parsed = parseViewBox(icon.viewBox);
+      return Math.max(1, Math.ceil(parsed.height));
+    } catch {
+      return icon.height;
+    }
+  }));
+
+  const cellWidth = Math.max(1, maxWidth + padding * 2);
+  const cellHeight = Math.max(1, maxHeight + padding * 2);
+
+  // Calculate grid position for each icon
+  return icons.map((icon, index) => {
+    const col = index % columns;
+    const row = Math.floor(index / columns);
+    const x = col * cellWidth + padding;
+    const y = row * cellHeight + padding;
+
+    // Use viewBox for accurate dimensions
+    let width = icon.width;
+    let height = icon.height;
+    try {
+      const parsed = parseViewBox(icon.viewBox);
+      width = Math.max(1, Math.ceil(parsed.width));
+      height = Math.max(1, Math.ceil(parsed.height));
+    } catch {
+      // Fall back to declared dimensions
+    }
+
+    return {
+      id: icon.id,
+      x,
+      y,
+      w: width,
+      h: height,
+    };
+  });
+}
 
 /**
  * Output file paths
@@ -18,6 +104,8 @@ export interface OutputFilePaths {
   png: string;
   /** PNG sprite file path (2x) */
   png2x: string;
+  /** PNG preview file path (from SVG sprite) */
+  pngPreview: string;
   /** SVG sprite file path */
   svg: string;
   /** SVG sprite preview file path */
@@ -51,6 +139,7 @@ export interface OutputResult {
     fileSize: {
       png: number;
       png2x: number;
+      pngPreview: number;
       svg: number;
       svgPreview: number;
       scss: number;
@@ -77,6 +166,10 @@ export interface WriteOutputOptions {
   pngSprite2x?: {
     buffer: Buffer;
     sheet: SpriteSheet;
+  };
+  /** PNG preview from SVG sprite (optional) */
+  pngPreview?: {
+    buffer: Buffer;
   };
   /** SVG sprite data */
   svgSprite: SvgSpriteSheet;
@@ -118,6 +211,7 @@ export function buildOutputPaths(outputDir: string, outputName: string): OutputF
   return {
     png: normalizePath(joinPath(dir, `${outputName}.png`)),
     png2x: normalizePath(joinPath(dir, `${outputName}@2x.png`)),
+    pngPreview: normalizePath(joinPath(dir, `${outputName}.preview.png`)),
     svg: normalizePath(joinPath(dir, `${outputName}.svg`)),
     svgPreview: normalizePath(joinPath(dir, `${outputName}.preview.svg`)),
     scss: normalizePath(joinPath(dir, `${outputName}.scss`)),
@@ -289,9 +383,31 @@ export async function writeOutput(options: WriteOutputOptions): Promise<OutputRe
     options.pngSprite2x?.buffer
   );
 
+  // Write PNG preview file (from SVG sprite)
+  let pngPreviewSize = 0;
+  if (options.pngPreview) {
+    await writeFile(paths.pngPreview, options.pngPreview.buffer);
+    pngPreviewSize = options.pngPreview.buffer.length;
+  }
+
   // Write SVG file
   const svgSize = await writeSvgFile(paths.svg, options.svgSprite);
   const svgPreviewSize = await writeSvgPreviewFile(paths.svgPreview, options.svgSprite);
+
+  // Calculate SVG preview grid layout coordinates
+  const svgPreviewCoords = calculateSvgPreviewCoordinates(
+    options.svgSprite.icons,
+    {
+      padding: DEFAULT_PREVIEW_PADDING,
+      columns: Math.ceil(Math.sqrt(options.svgSprite.icons.length)),
+    }
+  );
+
+  // Extract SVG preview dimensions from sprite content
+  const svgPreviewViewBoxMatch = options.svgSprite.content.match(/viewBox=["']([^"']+)["']/);
+  const svgPreviewViewBox = svgPreviewViewBoxMatch
+    ? parseViewBox(svgPreviewViewBoxMatch[1])
+    : { x: 0, y: 0, width: 0, height: 0 };
 
   // Write SCSS file
   const scssSize = await writeScssFile(paths.scss, {
@@ -300,6 +416,12 @@ export async function writeOutput(options: WriteOutputOptions): Promise<OutputRe
     spriteWidth: options.pngSprite.sheet.width,
     spriteHeight: options.pngSprite.sheet.height,
     icons: options.pngSprite.sheet.icons,
+    svgPreview: {
+      spriteImage: `./${effectiveOutputName}.preview.png`,
+      spriteWidth: svgPreviewViewBox.width,
+      spriteHeight: svgPreviewViewBox.height,
+      icons: svgPreviewCoords,
+    },
   });
   const mixinsSize = await writeMixinsFile(paths.mixins, {
     spriteImage: `./${effectiveOutputName}.png`,
@@ -307,6 +429,12 @@ export async function writeOutput(options: WriteOutputOptions): Promise<OutputRe
     spriteWidth: options.pngSprite.sheet.width,
     spriteHeight: options.pngSprite.sheet.height,
     icons: options.pngSprite.sheet.icons,
+    svgPreview: {
+      spriteImage: `./${effectiveOutputName}.preview.png`,
+      spriteWidth: svgPreviewViewBox.width,
+      spriteHeight: svgPreviewViewBox.height,
+      icons: svgPreviewCoords,
+    },
   });
 
   // Write JSON metadata file
@@ -324,6 +452,11 @@ export async function writeOutput(options: WriteOutputOptions): Promise<OutputRe
     svgSprite: {
       hash: options.svgSprite.hash,
       icons: options.svgSprite.icons,
+    },
+    svgPreview: {
+      width: svgPreviewViewBox.width,
+      height: svgPreviewViewBox.height,
+      icons: svgPreviewCoords,
     },
     failedAssets: options.failedAssets,
   });
@@ -343,6 +476,7 @@ export async function writeOutput(options: WriteOutputOptions): Promise<OutputRe
       fileSize: {
         png: pngSizes.png,
         png2x: pngSizes.png2x,
+        pngPreview: pngPreviewSize,
         svg: svgSize,
         svgPreview: svgPreviewSize,
         scss: scssSize,

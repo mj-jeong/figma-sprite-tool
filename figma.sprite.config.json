@@ -23,7 +23,7 @@
     "sanitize": true
   },
   "output": {
-    "dir": "./sprites",
+    "dir": "./assets/sprites",
     "name": "sprite"
   }
 }

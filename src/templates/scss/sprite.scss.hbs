@@ -3,13 +3,31 @@
 // Source: Figma
 // --------------------------------------------------
 
+// PNG sprite (packed layout - optimized)
 $sprite-image: "{{spriteImage}}";
 $sprite-image-2x: "{{spriteImage2x}}";
 $sprite-width: {{spriteWidth}}px;
 $sprite-height: {{spriteHeight}}px;
 
+// Packed layout coordinates for sprite.png and sprite@2x.png
 $icons: (
 {{#each icons}}
   "{{id}}": (x: {{x}}px, y: {{y}}px, w: {{w}}px, h: {{h}}px){{#unless @last}},{{/unless}}
 {{/each}}
 );
+
+{{#if svgPreview}}
+// Preview sprite (grid layout - uniform cells)
+// Used for both sprite.preview.png and sprite.preview.svg
+$sprite-preview-png-image: "{{svgPreview.spriteImage}}" !default;
+$sprite-preview-svg-image: "./sprite.preview.svg" !default;
+$sprite-preview-width: {{svgPreview.spriteWidth}}px;
+$sprite-preview-height: {{svgPreview.spriteHeight}}px;
+
+// Grid layout coordinates for sprite.preview.png and sprite.preview.svg
+$preview-icons: (
+{{#each svgPreview.icons}}
+  "{{id}}": (x: {{x}}px, y: {{y}}px, w: {{w}}px, h: {{h}}px){{#unless @last}},{{/unless}}
+{{/each}}
+);
+{{/if}}

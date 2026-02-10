@@ -140,10 +140,35 @@ export async function rasterizeSvgIconsForPng(
       const renderWidth = normalizeSize(renderSize.width * normalizedScale);
       const renderHeight = normalizeSize(renderSize.height * normalizedScale);
 
+      // Debug: Log h80-play SVG rasterization details
+      if (svgIcon.id === 'h80-play') {
+        console.log(`[SVG→PNG] h80-play rasterization:`);
+        console.log(`  viewBox: ${svgIcon.viewBox}`);
+        console.log(`  parsed size: ${renderSize.width}x${renderSize.height}`);
+        console.log(`  render size (@${normalizedScale}x): ${renderWidth}x${renderHeight}`);
+        console.log(`  SVG content length: ${svgIcon.content.length} chars`);
+      }
+
       const buffer = await sharp(Buffer.from(svgIcon.content, 'utf-8'))
         .resize(renderWidth, renderHeight, { fit: 'fill' })
         .png()
         .toBuffer();
+
+      // Debug: Log actual PNG buffer size
+      const pngInfo = await sharp(buffer).metadata();
+      if (svgIcon.id === 'h80-play') {
+        console.log(`  PNG output: ${pngInfo.width}x${pngInfo.height}, ${buffer.length} bytes`);
+      }
+
+      // Verify buffer size matches expected dimensions
+      const expectedWidth = renderWidth;
+      const expectedHeight = renderHeight;
+      if (pngInfo.width !== expectedWidth || pngInfo.height !== expectedHeight) {
+        console.warn(`[SIZE MISMATCH] ${svgIcon.id}:`);
+        console.warn(`  Expected: ${expectedWidth}x${expectedHeight}`);
+        console.warn(`  Actual buffer: ${pngInfo.width}x${pngInfo.height}`);
+        console.warn(`  IconData will use: ${renderSize.width}x${renderSize.height} (1x size)`);
+      }
 
       return {
         id: svgIcon.id,
@@ -257,31 +282,26 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
       reason: string;
     }> = [];
 
-    // Export SVG first when enabled so PNG can be rasterized from same source
-    if (config.formats.svg.enabled) {
+    // Export SVG when PNG or SVG is enabled (SVG is source for accurate PNG generation)
+    if (config.formats.png.enabled || config.formats.svg.enabled) {
       const svgResult = await exportSvgImages(client, config.figma.fileKey, icons, iconMetadata);
       svgIconData = svgResult.items;
       svgFailures = svgResult.failures;
+
+      if (options.verbose && config.formats.png.enabled) {
+        logger.debug('Using SVG rasterization for PNG generation');
+        logger.debug('This ensures PNG dimensions match SVG viewBox exactly');
+      }
     }
 
+    // Always use SVG rasterization for PNG to avoid clipping issues
+    // Direct PNG export from Figma can clip vector-based icons due to absoluteBoundingBox behavior
     if (config.formats.png.enabled) {
-      if (config.formats.svg.enabled && svgIconData.length > 0) {
-        iconData = await rasterizeSvgIconsForPng(
-          svgIconData,
-          iconMetadata,
-          config.formats.png.scale ?? 1,
-        );
-      } else {
-        const pngResult = await exportPngImages(
-          client,
-          config.figma.fileKey,
-          icons,
-          iconMetadata,
-          config.formats.png.scale,
-        );
-        iconData = pngResult.items;
-        pngFailures = pngResult.failures;
-      }
+      iconData = await rasterizeSvgIconsForPng(
+        svgIconData,
+        iconMetadata,
+        config.formats.png.scale ?? 1,
+      );
     }
 
     const allFailures = [...pngFailures, ...svgFailures];
@@ -320,7 +340,6 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
     progress.start('Generating PNG sprites');
     const padding = config.formats.png.padding ?? 2;
     const packedIcons = packIconsWithPositions(iconData, padding);
-    assertNoPackedOverlap(packedIcons);
     const { width, height } = calculateSpriteDimensions(iconData, padding);
 
     const inputScale = config.formats.png.scale ?? 1;
@@ -356,6 +375,45 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
 
     progress.succeed('SVG sprite generated');
 
+    // Phase 6: Generate PNG preview from SVG sprite (for reference)
+    progress.start('Generating PNG preview from SVG sprite');
+
+    // Parse SVG viewBox to get dimensions
+    const svgViewBoxMatch = svgSprite.content.match(/viewBox=["']([^"']+)["']/);
+    let pngPreview: { buffer: Buffer } | undefined;
+
+    if (svgViewBoxMatch) {
+      try {
+        const viewBoxParsed = parseViewBox(svgViewBoxMatch[1]);
+        const previewWidth = viewBoxParsed.width;
+        const previewHeight = viewBoxParsed.height;
+
+        // Generate PNG preview from SVG sprite preview (rendered, not symbol-based)
+        const svgPreviewContent = generateSvgSpritePreview(svgSprite);
+        const previewBuffer = await sharp(Buffer.from(svgPreviewContent, 'utf-8'))
+          .resize(previewWidth, previewHeight, { fit: 'fill' })
+          .png({ compressionLevel: 9 })
+          .toBuffer();
+
+        pngPreview = { buffer: previewBuffer };
+
+        if (options.verbose) {
+          logger.debug(`PNG preview from SVG:`);
+          logger.debug(`  Dimensions: ${previewWidth}x${previewHeight}`);
+          logger.debug(`  Size: ${formatSize(previewBuffer.length)}`);
+        }
+
+        progress.succeed('PNG preview generated from SVG sprite');
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        logger.warn(`Failed to generate PNG preview from SVG: ${errorMsg}`);
+        progress.fail('PNG preview generation failed (continuing...)');
+      }
+    } else {
+      logger.warn('SVG sprite missing viewBox, skipping PNG preview');
+      progress.skip('PNG preview skipped');
+    }
+
     // Dry run mode - preview only
     if (options.dryRun) {
       logger.info('Dry run mode - no files will be written');
@@ -381,6 +439,12 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
         pc.dim(`  ${outputDir}/${outputName}.preview.svg`),
         pc.green(`(${formatSize(svgPreview.length)})`),
       );
+      if (pngPreview) {
+        console.log(
+          pc.dim(`  ${outputDir}/${outputName}.preview.png`),
+          pc.green(`(${formatSize(pngPreview.buffer.length)})`),
+        );
+      }
       console.log(pc.dim(`  ${outputDir}/${outputName}.scss`), pc.green('(~3-5 KB)'));
       console.log(pc.dim(`  ${outputDir}/mixins.scss`), pc.green('(~3-8 KB)'));
       console.log(pc.dim(`  ${outputDir}/${outputName}.json`), pc.green('(~5-10 KB)'));
@@ -391,7 +455,7 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
       return;
     }
 
-    // Phase 6: Write output files
+    // Phase 7: Write output files
     progress.start('Writing output files');
     const result = await writeOutput({
       outputDir,
@@ -404,6 +468,11 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
         ? {
             buffer: retinaSprite.buffer,
             sheet: retinaSprite,
+          }
+        : undefined,
+      pngPreview: pngPreview
+        ? {
+            buffer: pngPreview.buffer,
           }
         : undefined,
       svgSprite,

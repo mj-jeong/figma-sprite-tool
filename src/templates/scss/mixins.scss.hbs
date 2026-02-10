@@ -81,3 +81,41 @@ $sprite-svg-image: "./sprite.svg" !default;
   @include sprite-svg-position($icon, $unit, $rem-base);
   @include sprite-svg-size($icon, $unit, $rem-base);
 }
+
+// Preview sprite mixins (for sprite.preview.png or sprite.preview.svg)
+// Uses grid layout coordinates from $preview-icons
+@function _preview-icon($name) {
+  @return map-get($preview-icons, $name);
+}
+
+@mixin sprite-preview-image($icon, $unit: px, $rem-base: 10, $image: $sprite-preview-png-image) {
+  background-image: url(#{$image});
+  background-repeat: no-repeat;
+  background-size: _to-unit($sprite-preview-width, $unit, $rem-base) _to-unit($sprite-preview-height, $unit, $rem-base);
+}
+
+@mixin sprite-preview-position($icon, $unit: px, $rem-base: 10) {
+  background-position:
+    -#{_to-unit(map-get($icon, x), $unit, $rem-base)}
+    -#{_to-unit(map-get($icon, y), $unit, $rem-base)};
+}
+
+@mixin sprite-preview-size($icon, $unit: px, $rem-base: 10) {
+  width: _to-unit(map-get($icon, w), $unit, $rem-base);
+  height: _to-unit(map-get($icon, h), $unit, $rem-base);
+}
+
+// Main mixin for preview sprite (PNG or SVG)
+// Default: uses sprite.preview.png
+// For SVG: @include sprite-preview("icon-name", $image: $sprite-preview-svg-image)
+@mixin sprite-preview($name, $unit: px, $rem-base: 10, $image: $sprite-preview-png-image) {
+  $icon: _preview-icon($name);
+
+  @if $icon == null {
+    @error "Preview sprite icon `#{$name}` not found.";
+  }
+
+  @include sprite-preview-image($icon, $unit, $rem-base, $image);
+  @include sprite-preview-position($icon, $unit, $rem-base);
+  @include sprite-preview-size($icon, $unit, $rem-base);
+}

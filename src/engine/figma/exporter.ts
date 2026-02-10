@@ -9,6 +9,7 @@ import type { SpriteConfig } from '../types/config.js';
 import { FigmaClient } from './client.js';
 import { ErrorCode, createFigmaError } from '../../utils/errors.js';
 import { groupByExportId } from './utils.js';
+import { parseViewBox } from '../sprite/viewbox-extractor.js';
 
 /**
  * Parallel download configuration
@@ -63,6 +64,13 @@ export interface ExportFailure {
 
 /**
  * Export PNG images from Figma nodes with parallel downloads
+ *
+ * @deprecated This function may produce clipped PNGs for vector-based icons
+ * due to Figma's absoluteBoundingBox behavior with use_absolute_bounds parameter.
+ *
+ * Recommended: Use SVG export + rasterizeSvgIconsForPng() for guaranteed accuracy.
+ *
+ * @see rasterizeSvgIconsForPng in src/cli/commands/generate.ts
  */
 export async function exportPngImages(
   client: FigmaClient,
@@ -237,6 +245,16 @@ export async function exportSvgImages(
         const buffer = await client.downloadImage(url);
         const svgContent = buffer.toString('utf-8');
 
+        // Debug: Log SVG content for h80-play
+        if (exportId === '70:126' || svgContent.includes('h80/play')) {
+          console.log(`[DEBUG] SVG export for ${exportId}:`);
+          console.log(`  Content length: ${svgContent.length} chars`);
+          console.log(`  First 300 chars: ${svgContent.substring(0, 300)}`);
+          if (svgContent.length < 1000) {
+            console.log(`  Full content:\n${svgContent}`);
+          }
+        }
+
         // Find ALL icons that share this exportId (multiple instances of same component)
         const iconIds = exportIdMap.get(exportId) || [];
 
@@ -257,12 +275,25 @@ export async function exportSvgImages(
             // Extract viewBox from SVG
             const viewBox = extractViewBox(svgContent, metadata.bounds.width, metadata.bounds.height);
 
+            // Parse viewBox to get accurate dimensions (more reliable than absoluteBoundingBox for instances)
+            let iconWidth = metadata.bounds.width;
+            let iconHeight = metadata.bounds.height;
+
+            try {
+              const parsed = parseViewBox(viewBox);
+              iconWidth = parsed.width;
+              iconHeight = parsed.height;
+            } catch {
+              // Fallback to bounds if viewBox parsing fails
+              console.warn(`Failed to parse viewBox for ${iconId}, using absoluteBoundingBox`);
+            }
+
             return {
               id: iconId,
               content: svgContent,
               viewBox,
-              width: normalizeSize(metadata.bounds.width),
-              height: normalizeSize(metadata.bounds.height),
+              width: normalizeSize(iconWidth),
+              height: normalizeSize(iconHeight),
             };
           })
           .filter((item): item is SvgIconData => item !== null);

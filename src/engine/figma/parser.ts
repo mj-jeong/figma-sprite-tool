@@ -148,14 +148,21 @@ function extractIconNodes(
       // not reflect variant/property overrides on the instance.
       const exportId = node.id;
 
-      iconNodes.push({
+      const parsedNode: ParsedIconNode = {
         nodeId: node.id,
         exportId,
         name: node.name,
         type: node.type,
         bounds: frameNode.absoluteBoundingBox,
         visible: node.visible !== false,
-      });
+      };
+
+      // Debug: Log external component instances
+      if (node.type === 'INSTANCE' && node.componentId) {
+        console.log(`[INSTANCE] ${node.name}: nodeId=${node.id}, componentId=${node.componentId}`);
+      }
+
+      iconNodes.push(parsedNode);
     }
 
     // Recursively traverse children

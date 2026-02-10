@@ -34,6 +34,18 @@ export interface JsonGenerationOptions {
     hash: string;
     icons: SvgIconData[];
   };
+  /** SVG preview layout information */
+  svgPreview?: {
+    width: number;
+    height: number;
+    icons: Array<{
+      id: string;
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+    }>;
+  };
   /** Failed assets during export */
   failedAssets?: Array<{
     format: 'png' | 'svg';
@@ -90,6 +102,17 @@ export interface SpriteJsonOutput {
         png?: string;
       };
     };
+  };
+  svgPreview?: {
+    width: number;
+    height: number;
+    icons: Array<{
+      id: string;
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+    }>;
   };
 }
 
@@ -261,6 +284,7 @@ export function generateSpriteJson(options: JsonGenerationOptions): string {
         : undefined,
     },
     icons: {},
+    svgPreview: options.svgPreview,
   };
 
   // Build icons manifest

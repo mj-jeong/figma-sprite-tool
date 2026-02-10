@@ -151,19 +151,26 @@ The tool generates the following files:
 
 ```
 assets/sprite/{Page}/
-├── sprite.png                # 1x PNG sprite sheet
-├── sprite@2x.png             # 2x retina PNG sprite sheet
+├── sprite.png                # 1x PNG sprite sheet (packed layout)
+├── sprite@2x.png             # 2x retina PNG sprite sheet (packed layout)
+├── sprite.preview.png        # Preview PNG sprite sheet (grid layout)
 ├── sprite.svg                # SVG symbol sprite (root viewBox included)
-├── sprite.preview.svg        # Preview grid SVG for viewers
-├── sprite.scss               # Sprite data map
-├── mixins.scss               # PNG/SVG mixin APIs
-└── sprite.json               # Metadata + failedAssets report (if partial failures)
+├── sprite.preview.svg        # Preview grid SVG for viewers and backgrounds
+├── sprite.scss               # Sprite data maps ($icons, $preview-icons)
+├── mixins.scss               # PNG/SVG/Preview mixin APIs
+└── sprite.json               # Metadata + all coordinates + failedAssets report
 ```
 
 Notes:
 - Output directory is page-scoped: `{output.dir}/{sanitized-page-name}`.
 - If `sprite.*` already exists, a suffix is applied automatically (`sprite(1)`, `sprite(2)`, ...).
 - If some assets fail export, generation continues with successful assets and failure details are recorded.
+
+### Usage Guides
+
+For detailed usage instructions on how to use generated sprite files:
+- 🇰🇷 [스프라이트 사용 가이드 (한국어)](./docs/SPRITE_USAGE_GUIDE.md)
+- 🇬🇧 [Sprite Usage Guide (English)](./docs/SPRITE_USAGE_GUIDE_EN.md)
 
 ## Architecture
 
