@@ -2,6 +2,22 @@
 
 CLI tool to generate PNG/SVG sprite sheets, SCSS mixins, and JSON metadata from Figma design systems.
 
+## Quick Example
+
+```bash
+# 1. Install
+npm install --save-dev figma-sprite-tool
+
+# 2. Setup
+npx figma-sprite init
+
+# 3. Set token
+export FIGMA_TOKEN="your-figma-token"
+
+# 4. Generate!
+npx figma-sprite generate
+```
+
 ## Features
 
 - **Single Source of Truth**: Use Figma as your design system source
@@ -18,9 +34,30 @@ CLI tool to generate PNG/SVG sprite sheets, SCSS mixins, and JSON metadata from 
 
 ## Installation
 
-### For End Users
+### 🚀 Quick Start (Recommended)
 
-#### Global Installation (Recommended)
+**로컬 설치 + npx 사용** - 가장 간편하고 권장하는 방법입니다!
+
+```bash
+# 1. 프로젝트에 설치
+npm install --save-dev figma-sprite-tool
+
+# 2. npx로 바로 사용 (추가 설정 불필요!)
+npx figma-sprite init
+npx figma-sprite generate
+```
+
+> 💡 **Why npx?**
+> - 전역 설치 불필요
+> - 프로젝트별 버전 관리 가능
+> - `package.json`에 스크립트 추가 없이 바로 사용 가능
+> - 팀원들도 `npm install` 후 바로 사용 가능
+
+### 다른 설치 방법
+
+<details>
+<summary><strong>전역 설치 (Global Installation)</strong></summary>
+
 ```bash
 npm install -g figma-sprite-tool
 ```
@@ -28,27 +65,32 @@ npm install -g figma-sprite-tool
 Verify installation:
 ```bash
 figma-sprite --version
+figma-sprite init  # npx 없이 바로 사용 가능
 ```
 
-#### Use with npx (No Installation)
-```bash
-npx figma-sprite-tool init
-npx figma-sprite-tool generate
-```
+</details>
 
-#### Project-Local Installation
+<details>
+<summary><strong>npm scripts 사용 (팀 프로젝트 권장)</strong></summary>
+
 ```bash
+# 1. 로컬 설치
 npm install --save-dev figma-sprite-tool
-```
 
-Add to package.json:
-```json
+# 2. package.json에 스크립트 추가
 {
   "scripts": {
+    "sprite:init": "figma-sprite init",
     "sprite": "figma-sprite generate"
   }
 }
+
+# 3. npm run으로 실행
+npm run sprite:init
+npm run sprite
 ```
+
+</details>
 
 ## Environment Setup
 
@@ -117,32 +159,46 @@ pnpm format
 
 ### Quick Start (Recommended)
 
-1. **Run interactive setup**:
+1. **Install to your project**:
    ```bash
-   figma-sprite init
+   npm install --save-dev figma-sprite-tool
    ```
 
-2. **Follow the prompts** to configure your project:
+2. **Run interactive setup**:
+   ```bash
+   npx figma-sprite init
+   ```
+
+3. **Follow the prompts** to configure your project:
    - Enter your Figma file URL
    - Specify the page containing icons
    - Choose icon name prefix for filtering
    - Select icon ID format
    - Set output directory
 
-3. **Set your Figma token**:
+4. **Set your Figma token**:
    ```bash
    export FIGMA_TOKEN="your-figma-token"
    ```
    Get your token from: https://www.figma.com/developers/api#access-tokens
 
-4. **Generate sprites**:
+5. **Generate sprites**:
    ```bash
-   figma-sprite generate
+   npx figma-sprite generate
    ```
+
+> 💡 **Tip**: `npx` 명령어를 사용하면 전역 설치 없이도 로컬에 설치된 도구를 바로 실행할 수 있습니다!
 
 ### Manual Configuration (Advanced)
 
 If you prefer to create the configuration file manually, create a `figma.sprite.config.json` file in your project root:
+
+**Step 1: Install**
+```bash
+npm install --save-dev figma-sprite-tool
+```
+
+**Step 2: Create config file**
 
 ```json
 {
@@ -176,33 +232,49 @@ If you prefer to create the configuration file manually, create a `figma.sprite.
 }
 ```
 
+**Step 3: Set token and run**
+```bash
+export FIGMA_TOKEN="your-figma-token"
+npx figma-sprite generate
+```
+
 ## Usage
 
 ### Available Commands
 
+**로컬 설치 후 npx 사용 (권장):**
+
 ```bash
 # Create configuration interactively
-figma-sprite init
+npx figma-sprite init
 
 # Generate sprite from config
-figma-sprite generate
+npx figma-sprite generate
 # or
-figma-sprite build  # alias for generate
+npx figma-sprite build  # alias for generate
 
 # With custom config file
-figma-sprite generate -c custom.config.json
+npx figma-sprite generate -c custom.config.json
 
 # With output directory override
-figma-sprite generate -o ./custom-output
+npx figma-sprite generate -o ./custom-output
 
 # Verbose mode for debugging
-figma-sprite generate --verbose
+npx figma-sprite generate --verbose
 
 # Dry run (preview without writing files)
-figma-sprite generate --dry-run
+npx figma-sprite generate --dry-run
 
 # Set Figma token via environment variable
-FIGMA_TOKEN=your_token_here figma-sprite generate
+FIGMA_TOKEN=your_token_here npx figma-sprite generate
+```
+
+**전역 설치한 경우:**
+
+```bash
+# npx 없이 바로 사용 가능
+figma-sprite init
+figma-sprite generate
 ```
 
 ## Output Files
@@ -236,12 +308,19 @@ For detailed usage instructions on how to use generated sprite files:
 
 ### Command not found: figma-sprite
 
-**Problem**: Package not installed or not in PATH.
+**Problem**: `figma-sprite: command not found` 에러가 발생합니다.
 
-**Solutions**:
-- Install globally: `npm install -g figma-sprite-tool`
-- Use npx: `npx figma-sprite-tool [command]`
-- Check PATH: `which figma-sprite` (should show path)
+**가장 쉬운 해결 방법**:
+```bash
+# 로컬 설치 후 npx 사용 (권장)
+npm install --save-dev figma-sprite-tool
+npx figma-sprite init  # ✅ 작동!
+```
+
+**다른 해결 방법**:
+- 전역 설치: `npm install -g figma-sprite-tool` → `figma-sprite init` 직접 사용 가능
+- npm scripts: package.json에 `"scripts": { "sprite": "figma-sprite generate" }` 추가 후 `npm run sprite`
+- PATH 확인: `which figma-sprite` (전역 설치 시)
 
 ### Figma token not found
 
