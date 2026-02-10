@@ -197,9 +197,27 @@ function getFigmaToken(config: SpriteConfig): string {
   // Check environment variable
   const token = process.env.FIGMA_TOKEN;
   if (!token) {
-    throw new Error(
-      'Figma token not found. Set FIGMA_TOKEN environment variable or add personalAccessToken to config.',
-    );
+    const errorMessage = [
+      '❌ Figma token not found',
+      '',
+      '📝 Setup Instructions:',
+      '  1. Get your token: https://www.figma.com/developers/api#access-tokens',
+      '  2. Set environment variable:',
+      '',
+      '  Windows (Git Bash):',
+      '    export FIGMA_TOKEN="your-token-here"',
+      '',
+      '  Windows (CMD):',
+      '    set FIGMA_TOKEN=your-token-here',
+      '',
+      '  macOS/Linux:',
+      '    export FIGMA_TOKEN="your-token-here"',
+      '',
+      '  3. Or add to config: { "figma": { "personalAccessToken": "your-token" } }',
+      '',
+      '⚠️  Never commit tokens to git!',
+    ].join('\n');
+    throw new Error(errorMessage);
   }
 
   return token;

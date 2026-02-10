@@ -18,15 +18,75 @@ CLI tool to generate PNG/SVG sprite sheets, SCSS mixins, and JSON metadata from 
 
 ## Installation
 
+### For End Users
+
+#### Global Installation (Recommended)
 ```bash
-npm i -g figma-sprite-tool
+npm install -g figma-sprite-tool
 ```
 
-Without global install:
-
+Verify installation:
 ```bash
-npx figma-sprite --help
+figma-sprite --version
 ```
+
+#### Use with npx (No Installation)
+```bash
+npx figma-sprite-tool init
+npx figma-sprite-tool generate
+```
+
+#### Project-Local Installation
+```bash
+npm install --save-dev figma-sprite-tool
+```
+
+Add to package.json:
+```json
+{
+  "scripts": {
+    "sprite": "figma-sprite generate"
+  }
+}
+```
+
+## Environment Setup
+
+### Figma Token
+
+Get your token from: https://www.figma.com/developers/api#access-tokens
+
+#### Windows (Git Bash)
+```bash
+export FIGMA_TOKEN="your-token-here"
+```
+
+Make persistent:
+```bash
+echo 'export FIGMA_TOKEN="your-token-here"' >> ~/.bashrc
+```
+
+#### Windows (CMD)
+```cmd
+set FIGMA_TOKEN=your-token-here
+```
+
+Make persistent:
+```cmd
+setx FIGMA_TOKEN "your-token-here"
+```
+
+#### macOS/Linux
+```bash
+export FIGMA_TOKEN="your-token-here"
+```
+
+Make persistent:
+```bash
+echo 'export FIGMA_TOKEN="your-token-here"' >> ~/.bashrc
+```
+
+⚠️ **Never commit tokens to git!**
 
 ## Development
 
@@ -171,6 +231,43 @@ Notes:
 For detailed usage instructions on how to use generated sprite files:
 - 🇰🇷 [스프라이트 사용 가이드 (한국어)](./docs/SPRITE_USAGE_GUIDE.md)
 - 🇬🇧 [Sprite Usage Guide (English)](./docs/SPRITE_USAGE_GUIDE_EN.md)
+
+## Troubleshooting
+
+### Command not found: figma-sprite
+
+**Problem**: Package not installed or not in PATH.
+
+**Solutions**:
+- Install globally: `npm install -g figma-sprite-tool`
+- Use npx: `npx figma-sprite-tool [command]`
+- Check PATH: `which figma-sprite` (should show path)
+
+### Figma token not found
+
+**Problem**: FIGMA_TOKEN environment variable not set.
+
+**Solutions**:
+1. Get token from: https://www.figma.com/developers/api#access-tokens
+2. Set environment variable (see [Environment Setup](#environment-setup))
+3. Or add to config: `{ "figma": { "personalAccessToken": "..." } }`
+
+### Configuration file not found
+
+**Problem**: `figma.sprite.config.json` missing.
+
+**Solutions**:
+- Run: `figma-sprite init`
+- Or create config manually (see [Manual Configuration (Advanced)](#manual-configuration-advanced))
+
+### Permission denied (Windows)
+
+**Problem**: Execution policy blocks scripts.
+
+**Solution** (PowerShell as Administrator):
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
 
 ## Architecture
 

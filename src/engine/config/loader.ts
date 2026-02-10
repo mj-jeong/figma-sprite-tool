@@ -46,14 +46,28 @@ export async function loadConfig(options: ConfigPathOptions = {}): Promise<Sprit
   const configPath = await resolveConfigPath(options);
 
   if (!configPath) {
-    throw createConfigError(
-      ErrorCode.CONFIG_NOT_FOUND,
-      'Configuration file not found',
-      {
-        searchedPaths: DEFAULT_CONFIG_NAMES,
-        cwd: options.cwd ?? process.cwd(),
-      },
-    );
+    const cwd = options.cwd ?? process.cwd();
+    const errorMessage = [
+      '❌ Configuration file not found',
+      '',
+      '🚀 Quick Start:',
+      '  Run: figma-sprite init',
+      '  Then follow the interactive prompts',
+      '',
+      '📝 Manual Setup:',
+      `  Create ${DEFAULT_CONFIG_NAMES[0]} with:`,
+      '  {',
+      '    "figma": { "fileKey": "...", "page": "..." },',
+      '    "output": { "dir": "./sprites", "name": "sprite" }',
+      '  }',
+      '',
+      `📂 Searched in: ${cwd}`,
+      `📄 Tried: ${DEFAULT_CONFIG_NAMES.join(', ')}`,
+    ].join('\n');
+    throw createConfigError(ErrorCode.CONFIG_NOT_FOUND, errorMessage, {
+      searchedPaths: DEFAULT_CONFIG_NAMES,
+      cwd,
+    });
   }
 
   return await loadConfigFromPath(configPath);

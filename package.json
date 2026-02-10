@@ -43,7 +43,15 @@
     "cli",
     "automation"
   ],
-  "author": "",
+  "author": "minjujeong <mmm0628@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/username/figma-sprite-tool.git"
+  },
+  "homepage": "https://github.com/username/figma-sprite-tool#readme",
+  "bugs": {
+    "url": "https://github.com/username/figma-sprite-tool/issues"
+  },
   "license": "MIT",
   "dependencies": {
     "@types/inquirer": "^9.0.9",
